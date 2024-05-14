@@ -62,5 +62,5 @@ p<-ggplot(means,aes(x=day-1,y=Mean,color=cc))+
   ylab("Log(Ecology/Evolution)")+xlab("Day")+
   ggtitle("EMM of model over time with cc and total mean")
 
-ggsave("../../Figures/Supplementary/Figure S6.pdf",p,height=7,width=10)
+ggsave("../../Figures/Figure S6.pdf",p,height=7,width=10)
 ```

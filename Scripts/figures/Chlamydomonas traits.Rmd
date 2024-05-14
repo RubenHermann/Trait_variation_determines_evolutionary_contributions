@@ -87,7 +87,7 @@ p1<-ggplot(geb_summ,aes(y=mean,x=mmdist_ing_r,color=cc))+
   #ylim(c(-1.7,1.5))+
   ggtitle("levo_eco relative to trait distance")
 
-ggsave("../../Figures/Main/Figure 3a.pdf")
+ggsave("../../Figures/Figure 3a.pdf")
 
 #Plot traitspace according to toms data
 p2<-ggplot(traits,aes(x=growth,y=ingestion.rate..sec.,color=clone))+
@@ -99,5 +99,5 @@ p2<-ggplot(traits,aes(x=growth,y=ingestion.rate..sec.,color=clone))+
   geom_errorbar(aes(ymin=ing_min,ymax=ing_max),width=0,color=c("darkblue","blue","green","darkgreen"))+
   geom_errorbarh(aes(xmin=growth_min,xmax=growth_max),height=0,color=c("darkblue","blue","green","darkgreen"))
 
-ggsave("../../Figures/Main/Figure 1.pdf")
+ggsave("../../Figures/Figure 1.pdf")
 ```

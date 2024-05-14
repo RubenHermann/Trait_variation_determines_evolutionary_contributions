@@ -409,7 +409,7 @@ figure_all <-p6+p6_1+p6_2+p6_3+
   p5+p5_1+p5_2+p5_3+ 
   p3+p3_1+p3_2+p3_3
 guide_area()+plot_layout(ncol=4)
-ggsave("../../Figures/Main/Figure 2.pdf",figure_all,width=50,height=50,limitsize = FALSE)
+ggsave("../../Figures/Figure 2.pdf",figure_all,width=50,height=50,limitsize = FALSE)
 ```
 
 #########################################################################################################################
@@ -504,5 +504,5 @@ p2_4<-ggplot(subset(all_sum,variable=="rt_ml"),aes(x=day,y=mean,color=clone))+
         axis.text.x=element_blank())
 
 figure_S4 <- p1_4 + p2_4 +guide_area()+plot_layout(ncol=4)
-ggsave("../../Figures/Supplementary/Figure S1.pdf",figure_s4,width=30,height=50,limitsize = FALSE)
+ggsave("../../Figures/Figure S1.pdf",figure_s4,width=30,height=50,limitsize = FALSE)
 ```

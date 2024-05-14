@@ -238,15 +238,15 @@ ggplot(all_col,aes(x=trait_dist,y=ln_evo_eco,pch=start_freq,color=Kc1_f))+
   ylab("Log(Evolution/Ecology)")+xlab("Distance in traits")
 
 
-ggsave("../../Figures/Main/Figure 3b.pdf",p1,height = 7,width=9)  
+ggsave("../../Figures/Figure 3b.pdf",p1,height = 7,width=9)  
 ```
 
 Saving the results as csv file
 
 ```{r}
-write.csv(all_col,"Model results/Summarized results_P0.8_Kc2.csv")
-write.csv(all_col2,"Model results/Summarized results_P0.9_Kc1.csv")
+write.csv(all_col,"../../Data/Model results/Summarized results_P0.8_Kc2.csv")
+write.csv(all_col2,"../../Data/Model results/Summarized results_P0.9_Kc1.csv")
 
-write.csv(all_out,"Model results/Population dnymaics_P0.8_Kc2.csv")
-write.csv(all_out2,"Model results/Population dnymaics_P0.9_Kc1.csv")
+write.csv(all_out,"../../Data/Model results/Population dnymaics_P0.8_Kc2.csv")
+write.csv(all_out2,"../../Data/Model results/Population dnymaics_P0.9_Kc1.csv")
 ```
