@@ -1,0 +1,106 @@
+---
+title: "Put all data together"
+author: "Ruben Hermann"
+date: '2022-06-29'
+output: html_document
+---
+
+With this script I want to put together all different datasets into on file. Therefore I will take the sorted files from the IXM (the sorting step was done manually), the predicted frequencies from the Keras model and the rotifer counts from all their respective directories.
+
+```{r setup}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Load the rotifer data
+
+```{r}
+setwd("../../Data/Rotifer counts")
+rt_run1 <- read.csv("rt_count_run 1.csv")
+rt_run2 <- read.csv("rt_count_run 2.csv")
+rt_run3 <- read.csv("rt_count_run 3.csv")
+rt_all <- bind_rows(rt_run1,rt_run2,rt_run3)
+```
+
+## Load the IXM data
+
+```{r}
+setwd("../../Data/IXM/sorted")
+ixm_run1_treat <- read.csv("Run 1 treatments.csv")
+ixm_run2_treat <- read.csv("Run 2 treatments.csv")
+ixm_run3_treat <- read.csv("Run 3 treatments.csv")
+
+ixm_cont <- read.csv("IXM all controls.csv")
+ixm_all <- bind_rows(ixm_cont,ixm_run1_treat,ixm_run2_treat,ixm_run3_treat)
+ixm_all$vol_ml <- 0.05
+ixm_all$well_bot_perc <- 0.3315/9
+ixm_all$algae_ml <- ixm_all$Cell.Count..ChlamyLugol10xRuben./ixm_all$vol_ml/ixm_all$well_bot_perc
+
+
+```
+
+## Load the predicted frequencies
+```{r}
+isx_all<-read.csv("../../Data/ISX/Predicted frequencies/Predicted frequencies paired model.csv")
+isx_run1 <- subset(isx_all,run=="run1.csv")
+isx_run2 <- subset(isx_all,run=="run2.csv")
+isx_run3 <- subset(isx_all,run=="run3.csv")
+```
+
+
+## Creating a loop to put all data together
+
+```{r}
+all_data <- rt_all
+all_data$rt_ml <- all_data$rt_alive/all_data$vol_ml
+all_data <- subset(all_data,nacl_mM==0)
+all_data <- select(all_data,-rt_eggs & -rt_dead & -rt_alive & -vol_ml & -nacl_mM & -date & -notes)
+all_data$algae_ml = rep(NA,nrow(all_data))
+all_data$pred_freq_clone.1=NA
+all_data$pred_freq_clone.2=NA
+all_data$treat=NA
+
+
+
+for (i in 1:nrow(all_data)){
+  if(all_data$day[i]==0) {all_data$algae_ml[i]=385000}
+  for (j in 1:nrow(ixm_all)){
+  if(all_data$id[i]==ixm_all$ID[j] & all_data$day[i]==ixm_all$Day[j])
+  {all_data$algae_ml[i]=ixm_all$algae_ml[j]}
+  }
+}
+
+
+for (i in 1:nrow(all_data)){
+  if(all_data$day[i]==0) 
+    {all_data$pred_freq_clone.1[i]=all_data$Freq.clone.1[i]
+    all_data$pred_freq_clone.2[i]=all_data$Freq.clone.2[i]}
+  #if it is run1
+  if(all_data$run[i]==1){
+    for (j in 1:nrow(isx_run1)){
+      if(all_data$id[i]==isx_run1$ID[j] & all_data$day[i]==isx_run1$day[j])
+      {all_data$pred_freq_clone.1[i]=isx_run1$pred_cloneA_freq[j]
+      all_data$pred_freq_clone.2[i]=isx_run1$pred_cloneB_freq[j]}}}
+  #if it is run2  
+    if(all_data$run[i]==2){  
+  for (j in 1:nrow(isx_run2)){
+    if(all_data$id[i]==isx_run2$ID[j] & all_data$day[i]==isx_run2$day[j])
+    {all_data$pred_freq_clone.1[i]=isx_run2$pred_cloneA_freq[j]
+    all_data$pred_freq_clone.2[i]=isx_run2$pred_cloneB_freq[j]}} } 
+  #if it is run3  
+    if(all_data$run[i]==3){    
+  for (j in 1:nrow(isx_run3)){
+    if(all_data$id[i]==isx_run3$ID[j] & all_data$day[i]==isx_run3$day[j])
+    {all_data$pred_freq_clone.1[i]=isx_run3$pred_cloneA_freq[j]
+    all_data$pred_freq_clone.2[i]=isx_run3$pred_cloneB_freq[j]}}}  
+}
+
+for (i in 1:nrow(all_data)){
+  if(all_data$Freq.clone.1[i]==0 | all_data$Freq.clone.1[i]==1){all_data$treat[i]="Control"}
+    else{all_data$treat[i]="Treatment"}
+}
+
+write.csv(all_data,"../../Data/Empirical results/all_data_assembled.csv")
+
+```

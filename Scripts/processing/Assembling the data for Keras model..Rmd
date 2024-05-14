@@ -1,0 +1,176 @@
+---
+title: "Creating keras model for chapter 3"
+author: "Ruben Hermann"
+date: '2022-06-27'
+output: html_document
+---
+
+In this script I will collect the feature files from images of single clonal controls. All feature files from each clone will be collected, randomized and collected into separate files for: training, validating and testing the model. Such as that the Keras model has not "seen" the validating and testing data prior that respective step
+
+```{r setup}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Assembling the data
+### Reading in the data from CR1
+All read csv files are first put into a big list and than added up to one big data frame, the rows of the data frame gets randomized so there is no order anymore in it and at last the column X gets deleted (which is always created by R when it saves a file)
+
+```{r}
+setwd('../../Data/ISX/Renamed feature files/Controls')
+#reading in the data
+#Here I am loading each file from the directory from the CR1 monoclone control
+CR1_list<-NULL
+temp= list.files(pattern="CR1_CR6_freq_def1")
+for (i in 1:length(temp)) {
+  CR1_list[[i]]<-read.csv(temp[i],dec=".")
+}
+CR1<- bind_rows(CR1_list)
+CR1 <- select(CR1,-X)
+CR1 <- CR1[sample(nrow(CR1)),]
+
+```
+
+### Reading in the data from CR2
+
+```{r}
+setwd('../../Data/ISX/Renamed feature files/Controls')
+#reading in the data
+#Here I am loading each file from the directory from the CR2 monoclone control
+CR2_list<-NULL
+temp= list.files(pattern="CR2_CR6_freq_def1")
+for (i in 1:length(temp)) {
+  CR2_list[[i]]<-read.csv(temp[i],dec=".")
+}
+CR2<- bind_rows(CR2_list)
+CR2 <- select(CR2,-X)
+CR2 <- CR2[sample(nrow(CR2)),]
+
+```
+
+### Reading in the data from CR6
+
+```{r}
+setwd('../../Data/ISX/Renamed feature files/Controls')
+#reading in the data
+#Here I am loading each file from the directory from the CR6 monoclone control
+CR6_list<-NULL
+temp= list.files(pattern="CR1_CR6_freq_def0")
+for (i in 1:length(temp)) {
+  CR6_list[[i]]<-read.csv(temp[i],dec=".")
+}
+CR6<- bind_rows(CR6_list)
+CR6 <- select(CR6,-X)
+CR6 <- CR6[sample(nrow(CR6)),]
+
+```
+
+### Reading in the data from CR7
+
+```{r}
+setwd('../../Data/ISX/Renamed feature files/Controls')
+#reading in the data
+#Here I am loading each file from the directory from the CR7 monoclone control
+CR7_list<-NULL
+temp= list.files(pattern="CR1_CR7_freq_def0")
+for (i in 1:length(temp)) {
+  CR7_list[[i]]<-read.csv(temp[i],dec=".")
+}
+CR7<- bind_rows(CR7_list)
+CR7 <- select(CR7,-X)
+CR7 <- CR7[sample(nrow(CR7)),]
+
+```
+
+## Preparing the data for the model
+### Splitting the to have 80% for training, 10% for each validation and testing
+For the training data I need the same quantity from each clone so the training quantity will be determined by 8% of the data from the clone with the least objects, which is CR2
+
+As I have more images from CR1 than from CR2 in the controls (the defended clones grow generally slower than the undefended), I will create a long list for model training with CR1 and a short list for training with CR2.
+
+```{r}
+train_num <- round(nrow(CR2) * 0.8)
+test_num <- round(nrow(CR2) * 0.1)+train_num
+val_num <- round(nrow(CR2) * 0.1)+test_num
+
+train_num_l <- round(nrow(CR1) * 0.8)
+test_num_l <- round(nrow(CR1) * 0.1)+train_num_l
+val_num_l <- round(nrow(CR1) * 0.1)+test_num_l
+
+##################################################################################################
+#CR2 training set
+
+CR1_train_short <- CR1[1:train_num,]
+CR1_test_short <- CR1[train_num:test_num,]
+CR1_val_short <- CR1[test_num:val_num,]
+
+CR2_train <- CR2[1:train_num,]
+CR2_test <- CR2[train_num:test_num,]
+CR2_val <- CR2[test_num:val_num,]
+
+CR2_train_short <- CR2[1:train_num,]
+CR2_test_short <- CR2[train_num:test_num,]
+CR2_val_short <- CR2[test_num:val_num,]
+
+CR6_train_short <- CR6[1:train_num,]
+CR6_test_short <- CR6[train_num:test_num,]
+CR6_val_short <- CR6[test_num:val_num,]
+
+CR7_train_short <- CR7[1:train_num,]
+CR7_test_short <- CR7[train_num:test_num,]
+CR7_val_short <- CR7[test_num:val_num,]
+
+##########################################################################################################
+#CR1 training set
+
+CR1_train <- CR1[1:train_num_l,]
+CR1_test <- CR1[train_num_l:test_num_l,]
+CR1_val <- CR1[test_num_l:val_num_l,]
+
+CR6_train_long <- CR6[1:train_num_l,]
+CR6_test_long <- CR6[train_num_l:test_num_l,]
+CR6_val_long <- CR6[test_num_l:val_num_l,]
+
+CR7_train_long <- CR7[1:train_num_l,]
+CR7_test_long <- CR7[train_num_l:test_num_l,]
+CR7_val_long <- CR7[test_num_l:val_num_l,]
+
+```
+
+### Saving the files
+```{r}
+setwd("../../Data/ISX/Keras model training")
+
+write.csv(CR2_train,"CR2_train.csv")
+write.csv(CR2_test,"CR2_test.csv")
+write.csv(CR2_val,"CR2_val.csv")
+
+write.csv(CR2_train_short,"CR2_train_short.csv")
+write.csv(CR2_test_short,"CR2_test_short.csv")
+write.csv(CR2_val_short,"CR2_val_short.csv")
+
+write.csv(CR6_train_short,"CR6_train_short.csv")
+write.csv(CR6_test_short,"CR6_test_short.csv")
+write.csv(CR6_val_short,"CR6_val_short.csv")
+
+write.csv(CR7_train_short,"CR7_train_short.csv")
+write.csv(CR7_test_short,"CR7_test_short.csv")
+write.csv(CR7_val_short,"CR7_val_short.csv")
+
+write.csv(CR1_train_short,"CR1_train_short.csv")
+write.csv(CR1_test_short,"CR1_test_short.csv")
+write.csv(CR1_val_short,"CR1_val_short.csv")
+
+write.csv(CR1_train,"CR1_train.csv")
+write.csv(CR1_test,"CR1_test.csv")
+write.csv(CR1_val,"CR1_val.csv")
+
+write.csv(CR6_train_long,"CR6_train_long.csv")
+write.csv(CR6_test_long,"CR6_test_long.csv")
+write.csv(CR6_val_long,"CR6_val_long.csv")
+
+write.csv(CR7_train_long,"CR7_train_long.csv")
+write.csv(CR7_test_long,"CR7_test_long.csv")
+write.csv(CR7_val_long,"CR7_val_long.csv")
+```

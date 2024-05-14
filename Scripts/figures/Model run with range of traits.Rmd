@@ -1,0 +1,252 @@
+---
+title: "Running the model over a range of traits"
+author: "Ruben J, Hermann"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r setup, include=FALSE}
+#Loading packages
+knitr::opts_chunk$set(echo = TRUE,warning = FALSE, message = FALSE)
+library(deSolve)
+library(tidyverse)
+library(abc)
+library(rstatix)
+
+#Loading external functions
+source("./R/AB_sym.R")
+source("./R/Evo_evo_method.R")
+```
+
+
+## The model from Becks et al  (2012)
+The original mode is from Becks et al (2012) and is specially designed for this predator-prey system. It simulates the population dynamics of the predator and prey species, as well as the Nitrogen concentraiton, for a chemostat experiment. The predator species consists of reproducing rotifers ($B$) and non-reproducing (senescent, $S$) and the prey population consists of two different clones ($C_1$, $C_2$) which differ in their defense (palatability $P_1$, $P_2$) and competitivness (half-saturation $Kc_1$,$Kc_2$) traits. Nitrogen concentration $N$ is also tracked.
+
+The model thus consists of 5 ODEs describing the dynamics:
+
+$ dN = D*(Ni - N) - P*C1*\frac{N}{Kc1 + N} -  P*C2*\frac{N}{Kc2 + N} $
+$ dC1 = C1*(Xc*P*\frac{N}{Kc1 + N} - P1*G*\frac{B + S}{Kb + max(P1*C1 + P2*C2)} - D) $
+$ dC2 = C2*(Xc*P*\frac{N}{Kc2 + N} - P2*G*\frac{B + S}{Kb + max(P1*C1 + P2*C2)} - D) $
+$ dB = B*(Xb*G*\frac{P1*C1 + P2*C2}{Kb + max(P1*C1 + P2*C2)} - (D + M + L)) $
+$ dS = L*B - (D + M)*S $
+
+The model also simulates a daily dilution rate ($D$), by which new Nitrogen at a concetration $N_i$ is added to the chemostat volume $V$ and predator, prey and nitrogen are diluted out of the chemostat. The parameters of the equations are:
+$Kb$ = Rotifer consumption half-saturation constant
+$Bc$ = Algae maximum recruitment rate
+$Bb$ = Rotifer maximum recruitment rate
+$P$ = Algae minimum food value
+$Xc$ = Algae conversion efficiency
+$Xb$ = Rotifer conversion efficiency
+$G$ = Rotifer maximum clearance rate
+$L$ = Rotifer senescence rate
+$M$ = Rotifer mortality rate
+
+## Set the loop for 100 simulations with a range of traits for the defended clone.
+```{r tidy=TRUE, echo = T, results = 'hide', tidy.opts=list(width.cutoff=60)}
+n.iter <- 100 # Number of simulations
+  
+P1=0.8
+Kc1=2
+P2=seq(0.2,0.79,length.out=n.iter)
+Kc2=seq(8,2.1,length.out=n.iter)
+col<-data.frame(Kc1=0,Kc2=0,P1=0,P2=0,dist=0,run=0,start_freq=0)
+freq <- c(0.6,0.7,0.8,0.9)
+
+for(j in 1:4){
+  start_freq<-freq[j]
+  for(i in 1:n.iter){
+    # input parameters
+    params=c(Ni=80,V=0.33,D=0.3,Kb=0.15,Bc=0.72,Bb=1.90,P=270,Xc=0.0027,Xb=170,G=0.011,L=0.40,M=0.055,P1=P1,P2=P2[i],Kc1=Kc1,Kc2=Kc2[i])
+    times <- seq(from=0,to=100,by=1)
+    C_start=0.03940544+0.35464895
+    xstart <- c(N=80,C1=C_start*(1-start_freq),C2=C_start*start_freq,B=3.897801,S=0)
+    #run simulation using that iteration's parameter values
+    out.r <- AB_sym(times,xstart,params)
+    out.r$run <- i
+    #summing up clonal density to total algal density
+    out.r$C_all <- out.r$C1+ out.r$C2
+    #calculating frequency of the defended clone
+    out.r$freq_udef <- out.r$C1/out.r$C_all
+    #starting frequency of the defended clone
+    out.r$start_freq<- (1-start_freq)
+    # record iteration's parameter values
+    col[i,1] <- Kc1
+    col[i,2] <- Kc2[i]
+    col[i,3] <- P1
+    col[i,4] <- P2[i]
+    col[i,5] <-
+    col[i,6] <- i 
+    col[i,7] <- (1-start_freq)
+    if(i==1){out<-out.r}
+    if(i>1){out<-bind_rows(out,out.r)}
+  }
+  if(j==1){all_out<-out;all_col<-col}
+  if(j>1){all_out<-bind_rows(all_out,out);all_col<-bind_rows(all_col,col)}
+}
+```
+
+# Calculating the relative impact of evolution and ecology
+```{r}
+#setting some empty columns
+all_out$B_growth<-0
+#calculate the variable x, which is ecological influence multiplied with evolutionary influence
+all_out$var_x <- all_out$freq_udef*all_out$C_all
+
+data_all <- all_out
+#separate the data frame into the different starting frequencies
+for (i in 1:nrow(all_col)){
+  dat <- data_all[1:length(times),]
+  data_all<-data_all[-(1:length(times)),]
+  #calculating the growth rate of the rotifer
+  for(j in 2:length(times)){
+    dat$B_growth[j] <- log(dat$B[j])-log(dat$B[j-1])
+  }
+  geb<-Geber_method(dat,times)
+  if(i==1){geb_all<-geb}
+  if(i>1){geb_all<-bind_rows(geb_all,geb)}
+  geb <- geb[!is.infinite(geb$ln_evo_eco),]
+  all_col$ln_evo_eco[i] <- mean(geb$ln_evo_eco,na.rm=T)
+}    
+
+```
+
+## Calculating the trait distance after normalizing it
+```{r}
+Kc_max <- max(c(all_col$Kc1,all_col$Kc2))
+Kc_min <- min(c(all_col$Kc1,all_col$Kc2))
+
+P_max <- max(c(all_col$P1,all_col$P2))
+P_min <- min(c(all_col$P1,all_col$P2))
+
+all_col$Kc1_ms <- (all_col$Kc1-Kc_min)/(Kc_max-Kc_min)
+all_col$Kc2_ms <- (all_col$Kc2-Kc_min)/(Kc_max-Kc_min)
+
+all_col$P1_ms <- (all_col$P1-P_min)/(P_max-P_min)
+all_col$P2_ms <- (all_col$P2-P_min)/(P_max-P_min)
+
+all_col$trait_dist<-0
+for (i in 1:nrow(all_col)){
+all_col$trait_dist[i] <-dist(rbind(c(all_col$Kc1[i],all_col$P1[i]),c(all_col$Kc2[i],all_col$P2[i])))
+}
+```
+
+
+## Set the loop for 100 simulations with the second undefended clone and again a range of traits for the defended clone.
+```{r tidy=TRUE, echo = T, results = 'hide', tidy.opts=list(width.cutoff=60)}
+n.iter <- 100 # Number of simulations
+  
+P1=0.9
+Kc1=1
+P2=seq(0.2,0.89,length.out=n.iter)
+Kc2=seq(8,1.1,length.out=n.iter)
+col<-data.frame(Kc1=0,Kc2=0,P1=0,P2=0,dist=0,run=0,start_freq=0)
+freq <- c(0.6,0.7,0.8,0.9)
+
+for(j in 1:4){
+  start_freq<-freq[j]
+  for(i in 1:n.iter){
+    # input parameters
+    params=c(Ni=80,V=0.33,D=0.3,Kb=0.15,Bc=0.72,Bb=1.90,P=270,Xc=0.0027,Xb=170,G=0.011,L=0.40,M=0.055,P1=P1,P2=P2[i],Kc1=Kc1,Kc2=Kc2[i])
+    times <- seq(from=0,to=100,by=1)
+    C_start=0.03940544+0.35464895
+    xstart <- c(N=80,C1=C_start*(1-start_freq),C2=C_start*start_freq,B=3.897801,S=0)
+    #run simulation using that iteration's parameter values
+    out.r <- AB_sym(times,xstart,params)
+    out.r$run <- i
+    #summing up clonal density to total algal density
+    out.r$C_all <- out.r$C1+ out.r$C2
+    #calculating frequency of the defended clone
+    out.r$freq_udef <- out.r$C1/out.r$C_all
+    #starting frequency of the defended clone
+    out.r$start_freq<- (1-start_freq)
+    # record iteration's parameter values
+    col[i,1] <- Kc1
+    col[i,2] <- Kc2[i]
+    col[i,3] <- P1
+    col[i,4] <- P2[i]
+    col[i,5] <-
+    col[i,6] <- i 
+    col[i,7] <- (1-start_freq)
+    if(i==1){out<-out.r}
+    if(i>1){out<-bind_rows(out,out.r)}
+  }
+  if(j==1){all_out2<-out;all_col2<-col}
+  if(j>1){all_out2<-bind_rows(all_out2,out);all_col2<-bind_rows(all_col2,col)}
+}
+```
+
+
+# Calculating the relative impact of evolution and ecology
+```{r}
+#setting some empty columns
+all_out2$B_growth<-0
+all_col2$ln_evo_eco<- NA
+#calculate the variable x, which is ecological influence multiplied with evolutionary influence
+all_out2$var_x <- all_out2$freq_udef*all_out2$C_all
+
+data_all <- all_out2
+#separate the data frame into the different starting frequencies
+for (i in 1:nrow(all_col2)){
+  dat <- data_all[1:length(times),]
+  data_all<-data_all[-(1:length(times)),]
+  #calculating the growth rate of the rotifer
+  for(j in 2:length(times)){
+    dat$B_growth[j] <- log(dat$B[j])-log(dat$B[j-1])
+  }
+  geb<-Geber_method(dat,times)
+  if(i==1){geb_all2<-geb}
+  if(i>1){geb_all2<-bind_rows(geb_all,geb)}
+  geb <- geb[!is.infinite(geb$ln_evo_eco),]
+  all_col2$ln_evo_eco[i] <- mean(geb$ln_evo_eco,na.rm=T)
+}    
+
+```
+
+## Calculating the trait distance after normalizing it
+```{r}
+Kc_max <- max(c(all_col2$Kc1,all_col2$Kc2))
+Kc_min <- min(c(all_col2$Kc1,all_col2$Kc2))
+
+P_max <- max(c(all_col2$P1,all_col2$P2))
+P_min <- min(c(all_col2$P1,all_col2$P2))
+
+all_col2$Kc1_ms <- (all_col2$Kc1-Kc_min)/(Kc_max-Kc_min)
+all_col2$Kc2_ms <- (all_col2$Kc2-Kc_min)/(Kc_max-Kc_min)
+
+all_col2$P1_ms <- (all_col2$P1-P_min)/(P_max-P_min)
+all_col2$P2_ms <- (all_col2$P2-P_min)/(P_max-P_min)
+
+all_col2$trait_dist<-0
+for (i in 1:nrow(all_col2)){
+all_col2$trait_dist[i] <-dist(rbind(c(all_col2$Kc1[i],all_col2$P1[i]),c(all_col2$Kc2[i],all_col2$P2[i])))
+}
+```
+
+```{r}
+all_col$start_freq<-as.factor(all_col$start_freq)
+all_col2$start_freq<-as.factor(all_col2$start_freq)
+all_col$Kc1_f <- as.factor(all_col$Kc1)
+all_col2$Kc1_f <- as.factor(all_col2$Kc1)
+
+ggplot(all_col,aes(x=trait_dist,y=ln_evo_eco,pch=start_freq,color=Kc1_f))+
+  geom_point()+
+  geom_point(data=all_col2,aes(x=trait_dist,y=ln_evo_eco,pch=start_freq,color=Kc1_f))+
+  ylim(c(-2.2,5))+
+  theme_classic()+
+  scale_color_manual(values=c("darkgreen","blue"),labels=c("P=0.8 & Kc=2","P=0.9 & Kc=1"))+
+  scale_shape_manual(values=c(16,17,15,18),labels=c("0.4","0.3","0.2","0.1"))+
+  labs(color="Traits of undefended clone",pch="Starting frequency \nof undefended clone")+
+  ylab("Log(Evolution/Ecology)")+xlab("Distance in traits")
+
+
+ggsave("../../Figures/Main/Figure 3b.pdf",p1,height = 7,width=9)  
+```
+
+Saving the results as csv file
+
+```{r}
+write.csv(all_col,"Model results/Summarized results_P0.8_Kc2.csv")
+write.csv(all_col2,"Model results/Summarized results_P0.9_Kc1.csv")
+
+write.csv(all_out,"Model results/Population dnymaics_P0.8_Kc2.csv")
+write.csv(all_out2,"Model results/Population dnymaics_P0.9_Kc1.csv")
+```

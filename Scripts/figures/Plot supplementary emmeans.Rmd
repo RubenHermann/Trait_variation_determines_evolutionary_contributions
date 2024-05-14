@@ -1,0 +1,66 @@
+---
+title: "Plot supplementary emmeans"
+author: "Ruben J, Hermann"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+Here the emmeans are calculated and plotted
+
+```{r}
+rm(list=ls())
+library(tidyverse)
+library(rstatix)
+library(fitdistrplus)
+library(lme4)
+data <- read.csv("../../Data/Empirical results/final_data.csv")
+logit <- qlogis
+```
+```{r}
+data <- subset(data,treat=="Treatment")
+data <- subset(data,id!=100)
+data$rt_ml[data$rt_ml==0] <-NA
+
+clone_comb=NULL
+for (i in 1:nrow(data)) {
+  clone_comb[i]=paste(data$Clone.1[i],"_",data$Clone.2[i],sep="")
+}
+
+data$cc <- clone_comb
+data<-data %>% convert_as_factor(cc,Freq.clone.1,Rep)
+data$levo_eco <- log(abs(data$evo_eco))
+data$day_fact<-as.factor(data$day)
+
+levo_eco_data<- do.call(data.frame,                      # Replace Inf in data by NA
+                  lapply(data,
+                         function(x) replace(x, is.infinite(x), NA)))
+
+levo_eco_data <- levo_eco_data[complete.cases(levo_eco_data$levo_eco),]
+
+m_levo2<-lmer(levo_eco~cc*day_fact+(1|Rep),data=levo_eco_data,contrasts =contr.sum)
+
+summary(m_levo2)
+Anova(m_levo2)
+```
+
+
+```{r}
+#getting the EMM from the model
+means<-estimate_means(m_levo2)
+#means <- pairs(emmeans(m_levo,~cc|day))
+means$day <- as.numeric(means$day_fact)
+
+
+#Plot
+p<-ggplot(means,aes(x=day-1,y=Mean,color=cc))+
+  geom_point(size=4)+
+  geom_hline(yintercept=0,linewidth=1)+
+  geom_line(data=means ,aes(x=day-1,y=Mean,color=cc),linewidth=2)+
+  scale_color_manual(values=c("#11c3c1","#252A34","#FF2E63","#999c9e"))+
+  theme_classic()+
+  scale_x_continuous(breaks=0:7)+
+  ylab("Log(Ecology/Evolution)")+xlab("Day")+
+  ggtitle("EMM of model over time with cc and total mean")
+
+ggsave("../../Figures/Supplementary/Figure S6.pdf",p,height=7,width=10)
+```

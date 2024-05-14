@@ -1,0 +1,128 @@
+---
+title: "Calculating evolutionary and ecologcal contributioins"
+author: "Ruben Hermann"
+date: '2022-07-06'
+output: html_document
+---
+
+Now I want to calculate the relative contribution of evolution (changed in prey frequency) and ecology (change in total prey population size) on changes of rotifer growth rates.
+
+```{r setup}
+rm(list=ls())
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(patchwork)
+```
+
+## Load in the data
+I have 17 variables in this data set:
+id = the ID of that specific samples (they are all unique going from 1 to 300)
+Clone.1 = The name of the defended clone in that sample
+Clone.2 = The name of the undefended clone in that sample
+Freq.clone.1 = The starting frequency of the defended clone
+Freq.clone.2 = The starting frequency of the undefended clone
+Rep = The biological replicate (n=10)
+run = the numbe of the separate run in which the sample was in (I had three different runs with each 100 samples)
+day = day of the experiment
+rt_ml = the density of the rotifers (they were counted alive in 5ml)
+algae_ml = density of the algae (for the method see:)
+pred_freq_clone.1 = predicted frequency of the defended algae (for method see:) (except for day 0 here I added the value from the starting frequency )
+pred_freq_clone.2 =predicted frequency of the defended algae (for method see:) (except for day 0 here I added the value from the starting frequency )
+treat = treatment type; control: only one clone present; treatment: two clones present
+
+```{r}
+data <- read.csv("../../Data/Empirical results/all_data_assembled.csv")
+```
+
+### First I will split the data frame into seperate data frames for each id
+)
+  
+```{r}
+data$fact_freq_def <- as.factor(data$Freq.clone.1)
+data <-data %>%
+  #sort by id as then the days are follow up as well
+  arrange(id) 
+
+data$rt_growth=NA
+
+#Now delete all growth values that were calculated between different ids
+for (i in 2:nrow(data)) {
+  if(data$id[i]==data$id[i-1]) {
+    diff = data$day[i]-data$day[i-1]
+    data$rt_growth[i]= (log(data$rt_ml[i]+1)-log(data$rt_ml[i-1]+1))/diff
+    if(is.na(data$rt_ml[i-1])) {
+        diff = data$day[i]-data$day[i-2]
+        data$rt_growth[i]= (log(data$rt_ml[i]+1)-log(data$rt_ml[i-2]+1))/diff
+    }
+  }
+}
+```
+
+## Creating X-value for each line 
+```{r}
+data$x_var = data$pred_freq_clone.2*data$algae_ml
+```
+
+## Seperate the data.frame into the different IDs and put them all in a big list
+
+```{r}
+treat= subset(data,treat=="Treatment")
+id_list <- unique(treat$id)
+#treat <- subset(treat,day!=0)
+ALL<-list()
+lnames=NULL
+for (i in seq_along(id_list)) {
+  ALL[[i]]<-subset(treat,id==id_list[i])
+  lnames[i] <- paste0("ID",id_list[i])
+}
+names(ALL)<-lnames
+```
+
+## Model fit between property of the system ~ eco * evo property of the system is the $X$ response value rotifer fitness (growth rate); eco = algal density; evo = frequency of defended clone, than the  coefficients (both standard errors for eco*evo and intercept) from the fit are taken
+
+```{r}
+fit=list()
+sto=list()
+for (i in 1:length(ALL)){
+  fit[[i]] <- lm(ALL[[i]]$rt_growth~ALL[[i]]$x_var)
+  sto[[i]] <- c(coef(summary(fit[[i]]))[1, 1],coef(summary(fit[[i]]))[2,1])
+}
+```
+
+## Calculating the contribution of evolution and ecology
+For that we are using again the eco and evo values + the coefficients from the fit
+
+```{r}
+ALL_comp=list()
+
+for (i in 1:length(ALL)){
+    ALL_comp[[i]] <- ALL[[i]]#[complete.cases(ALL[[i]]),]
+    ALL_comp[[i]]$evo <- NA
+    ALL_comp[[i]]$eco <- NA
+    ALL_comp[[i]]$eco_evo <- NA
+    ALL_comp[[i]]$evo_eco <- NA
+}
+for (i in 1:length(ALL)){
+  for (j in 1:nrow(ALL_comp[[i]])){
+    a=sto[[i]][1]+sto[[i]][2]*ALL_comp[[i]]$pred_freq_clone.2[j]*ALL_comp[[i]]$algae_ml[j]
+  
+    b=sto[[i]][1]+sto[[i]][2]*ALL_comp[[i]]$pred_freq_clone.2[j]*ALL_comp[[i]]$algae_ml[j+1]
+    
+    c=sto[[i]][1]+sto[[i]][2]*ALL_comp[[i]]$pred_freq_clone.2[j+1]*ALL_comp[[i]]$algae_ml[j]
+    
+    d=sto[[i]][1]+sto[[i]][2]*ALL_comp[[i]]$pred_freq_clone.2[j+1]*ALL_comp[[i]]$algae_ml[j+1]
+    
+  evo=((c-a)+(d-b))/2
+	eco=((b-a)+(d-c))/2
+	ALL_comp[[i]]$evo[j] <- evo
+	ALL_comp[[i]]$eco[j] <- eco
+	ALL_comp[[i]]$eco_evo[j] <- eco/evo
+	ALL_comp[[i]]$evo_eco[j] <- evo/eco
+  }
+}
+all_dat <- bind_rows(ALL_comp)
+all_dat$ln_cr <- log(all_dat$algae_ml)
+all_dat$ln_rt <- log(all_dat$rt_ml+1)
+
+write.csv(all_dat,"../../Data/Empirical results/final_data.csv")
+```

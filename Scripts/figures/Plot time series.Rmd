@@ -1,0 +1,508 @@
+---
+  title: "Plotting time series"
+author: "Ruben Hermann"
+date: '2022-07-06'
+output: html_document
+---
+  
+  Now I want to apply the geber method on my data that I collected from my experiments of Chapter 3
+
+```{r setup}
+rm(list=ls())
+library(tidyverse)
+library(patchwork)
+library(rstatix)
+getwd()
+```
+## Seperating the different clone combinations
+
+```{r}
+all_dat <- read.csv("../../Data/Empirical Results/final_data.csv")
+# Deleting the data, same as from statistics
+all_dat <- subset(all_dat,id!=100)
+all_dat$rt_ml[all_dat$rt_ml==0] <-NA
+
+
+all_dat<-all_dat %>% convert_as_factor(fact_freq_def)
+all_dat$levo_eco <- log(abs(all_dat$evo_eco))
+
+all_dat<- do.call(data.frame,                      # Replace Inf in data by NA
+                  lapply(all_dat,
+                         function(x) replace(x, is.infinite(x), NA)))
+
+all_dat$predprey <- all_dat$rt_ml/all_dat$algae_ml
+all_dat$logpp <- log(all_dat$predprey)
+all_dat$preypred <- all_dat$algae_ml/all_dat$rt_ml
+
+###########################################################################################################
+#Summing up the data for the different plotlinees
+
+all_sum <- all_dat %>% 
+  group_by(day,Clone.1,Clone.2,Freq.clone.1,fact_freq_def) %>%
+  get_summary_stats(c(rt_ml,algae_ml,ln_cr,ln_rt,levo_eco,evo_eco,pred_freq_clone.1), type = "mean_se")
+
+all_sum_m <- all_dat %>% 
+  group_by(day,Clone.1,Clone.2) %>%
+  get_summary_stats(c(rt_ml,algae_ml,ln_cr,ln_rt,levo_eco,evo_eco,pred_freq_clone.1), type = "mean_se")
+
+########################################################################################################
+#Separating the whole data 
+
+CR1_6 <- data.frame()
+CR2_6 <- data.frame()
+CR1_7 <- data.frame()
+CR2_7 <- data.frame()
+
+for (i in 1:nrow(all_dat)){
+  if(all_dat$Clone.1[i]=="CR1" & all_dat$Clone.2[i]=="CR6") CR1_6<-bind_rows(CR1_6,all_dat[i,])
+  if(all_dat$Clone.1[i]=="CR1" & all_dat$Clone.2[i]=="CR7") CR1_7<-bind_rows(CR1_7,all_dat[i,])
+  if(all_dat$Clone.1[i]=="CR2" & all_dat$Clone.2[i]=="CR6") CR2_6<-bind_rows(CR2_6,all_dat[i,])
+  if(all_dat$Clone.1[i]=="CR2" & all_dat$Clone.2[i]=="CR7") CR2_7<-bind_rows(CR2_7,all_dat[i,])
+}
+
+#####################################################################################################
+#Separating the mean grouped by: day,Clone.1,Clone.2,Freq.clone.1,fact_freq_def
+
+CR1_6_mean <- data.frame()
+CR2_6_mean <- data.frame()
+CR1_7_mean <- data.frame()
+CR2_7_mean <- data.frame()
+
+for (i in 1:nrow(all_sum)){
+  if(all_sum$Clone.1[i]=="CR1" & all_sum$Clone.2[i]=="CR6") CR1_6_mean<-bind_rows(CR1_6_mean,all_sum[i,])
+  if(all_sum$Clone.1[i]=="CR1" & all_sum$Clone.2[i]=="CR7") CR1_7_mean<-bind_rows(CR1_7_mean,all_sum[i,])
+  if(all_sum$Clone.1[i]=="CR2" & all_sum$Clone.2[i]=="CR6") CR2_6_mean<-bind_rows(CR2_6_mean,all_sum[i,])
+  if(all_sum$Clone.1[i]=="CR2" & all_sum$Clone.2[i]=="CR7") CR2_7_mean<-bind_rows(CR2_7_mean,all_sum[i,])
+}
+#####################################################################################################
+#Separating the mean grouped by: day,Clone.1,Clone.
+
+CR1_6_mean_m <- data.frame()
+CR2_6_mean_m <- data.frame()
+CR1_7_mean_m <- data.frame()
+CR2_7_mean_m <- data.frame()
+
+for (i in 1:nrow(all_sum_m)){
+  if(all_sum_m$Clone.1[i]=="CR1" & all_sum_m$Clone.2[i]=="CR6") CR1_6_mean_m<-bind_rows(CR1_6_mean_m,all_sum_m[i,])
+  if(all_sum_m$Clone.1[i]=="CR1" & all_sum_m$Clone.2[i]=="CR7") CR1_7_mean_m<-bind_rows(CR1_7_mean_m,all_sum_m[i,])
+  if(all_sum_m$Clone.1[i]=="CR2" & all_sum_m$Clone.2[i]=="CR6") CR2_6_mean_m<-bind_rows(CR2_6_mean_m,all_sum_m[i,])
+  if(all_sum_m$Clone.1[i]=="CR2" & all_sum_m$Clone.2[i]=="CR7") CR2_7_mean_m<-bind_rows(CR2_7_mean_m,all_sum_m[i,])
+}
+```
+
+## Plotting for CR1 with CR6
+
+```{r}
+p3<-ggplot(data=subset(CR1_6_mean,variable=="levo_eco"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+   geom_hline(aes(yintercept=0),size=1,color="black")+
+  ggtitle("CR1 with CR6 ")+
+  ylab("Log(|Evolution/Evcology|)")+xlab("Day")+
+  ylim(c(-4,4))+
+  labs(color = 'Starting freq of CR1')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        axis.text = element_text(size=37),
+        legend.position="none",
+        legend.title =  element_blank(),
+        axis.title=element_text(size=40),
+        plot.title=element_blank())
+
+p4<-ggplot(subset(CR1_6_mean,variable=="algae_ml"),aes(x=day,y=mean/100000,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  ylim(c(0,25))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Algae e+5 per ml")+xlab("Day")+
+  ggtitle("CR1 with CR6 algal density")+
+  geom_errorbar(aes(ymin=mean/100000-se/100000,ymax=mean/100000+se/100000),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        axis.text = element_text(size=37),
+        legend.position="none",
+        axis.title=element_text(size=40),
+        plot.title=element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank())
+
+p5<-ggplot(subset(CR1_6_mean,variable=="pred_freq_clone.1"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  ylim(c(0,1))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Frequency of defended clone")+xlab("Day")+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  ggtitle("CR1 with CR6 frequency of defend clone")+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        axis.text = element_text(size=37),
+        legend.position="none",
+        axis.title=element_text(size=40),
+        plot.title=element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank())
+
+p6<-ggplot(subset(CR1_6_mean,variable=="rt_ml"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  coord_cartesian(ylim=c(0,35)) + 
+  scale_y_continuous(breaks=seq(0, 35, 5))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Rotifer per ml")+xlab("Day")+
+  ggtitle("CR1 with CR6")+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        axis.text = element_text(size=37),
+        legend.position="none",
+        axis.title=element_text(size=40),
+        plot.title=element_text(size=50),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank())
+```
+
+## Plotting for CR1 with CR7
+
+```{r}
+p3_1<-ggplot(subset(CR1_7_mean,variable=="levo_eco"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  geom_hline(aes(yintercept=0),size=1,color="black")+
+  ggtitle("CR1 with CR7 ")+
+  ylab("Log(|Evolution/Evcology|)")+xlab("Day")+
+  ylim(c(-4,4))+
+  labs(color = 'Starting freq of CR1')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="none",
+        axis.title.x=element_text(size=40),
+        axis.text.x=element_text(size=37),
+        plot.title=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank())
+
+p4_1<-ggplot(subset(CR1_7_mean,variable=="algae_ml"),aes(x=day,y=mean/100000,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  ylim(c(0,25))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Algae x 10^5 / mL")+xlab("Day")+
+  ggtitle("CR1 with CR7 algal density")+
+  geom_errorbar(aes(ymin=mean/100000-se/100000,ymax=mean/100000+se/100000),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="none",
+        plot.title=element_blank(),
+        axis.title=element_blank(),
+        axis.text=element_blank())
+
+p5_1<-ggplot(subset(CR1_7_mean,variable=="pred_freq_clone.1"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  ylim(c(0,1))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Frequency of CR1")+xlab("Day")+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  ggtitle("CR1 with CR7 frequency of defend clone")+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="none",
+        plot.title=element_blank(),
+        axis.title=element_blank(),
+        axis.text=element_blank())
+
+p6_1<-ggplot(subset(CR1_7_mean,variable=="rt_ml"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  coord_cartesian(ylim=c(0,35)) + 
+  scale_y_continuous(breaks=seq(0, 35, 5))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Rotifer / mL")+xlab("Day")+
+  ggtitle("CR1 with CR7")+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="none",
+        plot.title=element_text(size=50),
+        axis.title=element_blank(),
+        axis.text=element_blank())
+```
+##########################################################################################################################
+## Plotting for CR2 with CR6
+#########################################################################################################################
+```{r}
+p3_2<-ggplot(subset(CR2_6_mean,variable=="levo_eco"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  theme_classic()+
+  geom_hline(aes(yintercept=0),size=1,color="black")+
+  ggtitle("CR2 with CR6")+
+  ylab("Log(|Evolution/Evcology|)")+xlab("Day")+
+  ylim(c(-4,4))+
+  xlim(c(-0.3,8.3))+
+  labs(color = 'Starting frequency \n of defended clone')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="none",
+        legend.title = element_text(size=40),
+        axis.title.x=element_text(size=40),
+        axis.text.x=element_text(size=37),
+        legend.text=element_text(size=40),
+        plot.title=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank())
+
+p4_2<-ggplot(subset(CR2_6_mean,variable=="algae_ml"),aes(x=day,y=mean/100000,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  ylim(c(0,25))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Algae x 10^5 / mL")+xlab("Day")+
+  ggtitle("CR2 with CR6 algal density")+
+  geom_errorbar(aes(ymin=mean/100000-se/100000,ymax=mean/100000+se/100000),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="none",
+        plot.title=element_blank(),
+        axis.title=element_blank(),
+        axis.text=element_blank())
+
+p5_2<-ggplot(subset(CR2_6_mean,variable=="pred_freq_clone.1"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  ylim(c(0,1))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Frequency of CR2")+xlab("Day")+
+  xlim(c(-0.3,8.3))+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  ggtitle("CR2 with CR6 frequency of defend clone")+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="none",
+        plot.title=element_blank(),
+        axis.title=element_blank(),
+        axis.text=element_blank())
+
+p6_2<-ggplot(subset(CR2_6_mean,variable=="rt_ml"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  coord_cartesian(ylim=c(0,35)) + 
+  scale_y_continuous(breaks=seq(0, 35, 5))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Rotifer / mL")+xlab("Day")+
+  ggtitle("CR2 with CR6")+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="none",
+        plot.title=element_text(size=50),
+        axis.title=element_blank(),
+        axis.text=element_blank())
+```
+
+## Plotting for CR2 with CR7
+
+```{r}
+p3_3<-ggplot(subset(CR2_7_mean,variable=="levo_eco"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  xlim(c(-0.3,8.3))+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  geom_hline(aes(yintercept=0),size=1,color="black")+
+  ggtitle("CR2 with CR7")+
+  ylab("Log(|Evolution/Evcology|)")+xlab("Day")+
+  ylim(c(-4,4))+
+  labs(color = 'Starting frequency \n of defended clone')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        axis.text = element_text(size=37),
+        legend.position="right",
+        legend.title = element_text(size=40),
+        axis.title.x=element_text(size=40),
+        axis.text.x=element_text(size=37),
+         plot.title=element_blank(),
+        legend.text=element_text(size=40),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank())
+
+p4_3<-ggplot(subset(CR2_7_mean,variable=="algae_ml"),aes(x=day,y=mean/100000,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  ylim(c(0,25))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Algae x 10^5 / mL")+xlab("Day")+
+  ggtitle("CR2 with CR7 algal density")+
+  geom_errorbar(aes(ymin=mean/100000-se/100000,ymax=mean/100000+se/100000),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+    labs(color = 'Starting frequency \n of defended clone')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="right",
+        legend.title = element_text(size=40),
+        legend.text=element_text(size=40),
+        plot.title=element_blank(),
+        axis.title=element_blank(),
+        axis.text=element_blank())
+
+p5_3<-ggplot(subset(CR2_7_mean,variable=="pred_freq_clone.1"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  ylim(c(0,1))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Frequency of CR2")+xlab("Day")+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  ggtitle("CR2 with CR7 frequency of defend clone")+
+    labs(color = 'Starting frequency \n of defended clone')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="right",
+        legend.title = element_text(size=40),
+        legend.text=element_text(size=40),
+        plot.title=element_blank(),
+        axis.title=element_blank(),
+        axis.text=element_blank())
+
+p6_3<-ggplot(subset(CR2_7_mean,variable=="rt_ml"),aes(x=day,y=mean,color=fact_freq_def))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  coord_cartesian(ylim=c(0,35)) + 
+  scale_y_continuous(breaks=seq(0, 35, 5))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Rotifer / mL")+xlab("Day")+
+  ggtitle("CR2 with CR7")+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+    labs(color = 'Starting frequency \n of defended clone')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="right",
+        legend.title = element_text(size=40),
+        legend.text=element_text(size=40),
+        plot.title=element_text(size=50),
+        axis.title=element_blank(),
+        axis.text=element_blank())
+```
+#########################################################################################################################
+## Creating a plot with all four different clonal lineage combinations
+
+```{r}
+figure_all <-p6+p6_1+p6_2+p6_3+
+  p4+p4_1+p4_2+p4_3+
+  p5+p5_1+p5_2+p5_3+ 
+  p3+p3_1+p3_2+p3_3
+guide_area()+plot_layout(ncol=4)
+ggsave("../../Figures/Main/Figure 2.pdf",figure_all,width=50,height=50,limitsize = FALSE)
+```
+
+#########################################################################################################################
+## Taking the data from the controls (only one clonal lineage present)
+
+```{r}
+all_dat <- read.csv("Empirical results/all_data_assembled.csv")
+all_dat <- subset(all_dat,treat=="Control")
+
+all_dat$fact_freq_def<- as.factor(all_dat$Freq.clone.1)
+all_dat$ln_rt <- log(all_dat$rt_ml)
+all_dat$ln_cr <- log(all_dat$algae_ml)
+
+all_dat<- do.call(data.frame,                      # Replace Inf in data by NA
+                  lapply(all_dat,
+                         function(x) replace(x, is.infinite(x), NA)))
+###########################################################################################################
+#Summing up the data for the different plotlinees
+all_sum <- all_dat %>% 
+  group_by(day,Clone.1,Clone.2,Freq.clone.1,fact_freq_def) %>%
+  get_summary_stats(c(rt_ml,algae_ml,ln_cr,ln_rt), type = "mean_se")
+
+
+########################################################################################################
+#Separating the whole data 
+all_dat$clone<- "NULL"
+
+for (i in 1:nrow(all_dat)){
+  if(all_dat$Clone.1[i]=="CR1" & all_dat$Freq.clone.1[i]==1) all_dat$clone[i]="CR1"
+  if(all_dat$Clone.1[i]=="CR2" & all_dat$Freq.clone.1[i]==1) all_dat$clone[i]="CR2"
+  if(all_dat$Clone.2[i]=="CR6" & all_dat$Freq.clone.1[i]==0) all_dat$clone[i]="CR6"
+  if(all_dat$Clone.2[i]=="CR7" & all_dat$Freq.clone.1[i]==0) all_dat$clone[i]="CR7"
+}
+
+#####################################################################################################
+#Separating the mean grouped by: day,Clone.1,Clone.2,Freq.clone.1,fact_freq_def
+all_sum$clone<- "NULL"
+
+for (i in 1:nrow(all_sum)){
+  if(all_sum$Clone.1[i]=="CR1" & all_sum$Freq.clone.1[i]==1) all_sum$clone[i]="CR1"
+  if(all_sum$Clone.1[i]=="CR2" & all_sum$Freq.clone.1[i]==1) all_sum$clone[i]="CR2"
+  if(all_sum$Clone.2[i]=="CR6" & all_sum$Freq.clone.1[i]==0) all_sum$clone[i]="CR6"
+  if(all_sum$Clone.2[i]=="CR7" & all_sum$Freq.clone.1[i]==0) all_sum$clone[i]="CR7"
+}
+#####################################################################################################
+```
+
+## Plot controls
+
+```{r}
+p1_4<-ggplot(subset(all_sum,variable=="algae_ml"),aes(x=day,y=mean/100000,color=clone))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  ylim(c(0,25))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Algae e+5 per ml")+xlab("Day")+
+  ggtitle("CR1 algal density")+
+  geom_errorbar(aes(ymin=mean/100000-se/100000,ymax=mean/100000+se/100000),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  scale_color_manual(values=c("#000066","#3366FF","#00FF33","#336600"))+
+    labs(color = 'Clones in \n control')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="right",
+        legend.title = element_text(size=40),
+        legend.text=element_text(size=40),
+        plot.title=element_text(size=50),
+        axis.title=element_text(size=40),
+        axis.text=element_text(size=37))
+
+p2_4<-ggplot(subset(all_sum,variable=="rt_ml"),aes(x=day,y=mean,color=clone))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  coord_cartesian(ylim=c(0,35)) + 
+  scale_y_continuous(breaks=seq(0, 35, 5))+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  ylab("Rotifer per ml")+xlab("Day")+
+  ggtitle("Controls")+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+    scale_color_manual(values=c("#000066","#3366FF","#00FF33","#336600"))+
+    labs(color = 'Clones in \n control')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="right",
+        legend.title = element_text(size=40),
+        legend.text=element_text(size=40),
+        plot.title=element_text(size=50),
+        axis.title.y=element_text(size=40),
+        axis.text.y=element_text(size=37),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank())
+
+figure_S4 <- p1_4 + p2_4 +guide_area()+plot_layout(ncol=4)
+ggsave("../../Figures/Supplementary/Figure S1.pdf",figure_s4,width=30,height=50,limitsize = FALSE)
+```

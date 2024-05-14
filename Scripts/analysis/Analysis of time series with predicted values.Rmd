@@ -1,0 +1,526 @@
+---
+title: "Analysis of time series with predicted values"
+author: "Ruben Hermann"
+date: "2022-08-18"
+output: html_document
+---
+
+```{r setup}
+rm(list=ls())
+library(tidyverse)
+library(rstatix)
+library(fitdistrplus)
+library(nlme)
+library(lme4)
+library(patchwork)
+data <- read.csv("../../Data/Empirical results/final_data.csv")
+logit <- qlogis
+```
+## Transforming
+separating the treatments, as I am not interested in the controls
+cc: the clone combination in a single column
+ln_cr: Natural log of algal density
+ln_rt: Natural log of rotifer density
+rt_data: including only data of interest for the statistcs:
+Rep= replicate number (Random)
+cc: Clone combination  (Treatment, fixed)
+Freq.clone.1= starting frequency of the defended clone (Treatment, fixed)
+ln_cr: density of algae (variable)
+ln_rt: Density of rotifer (variable)
+eco_evo: Log(abs(Ecological effect/Evolutionary effect)) calculated by geber method (variable)
+rt_growth: Rotifer growth rate (variable)
+logfreq: a logit transformation with the frequency data --> to create a "normal" distribution fo analysis
+
+
+Im deleting Rep 10 (id100) from the CR1_CR7 + 0.7 (CR1) starting frequency as the rotifers failed to establish in this replicate
+And Day 5 of id 181 (Rep 7) from CR1_CR6 + 0.6 (CR1) sarting frequency is also deleted, as no rotifers were acounted for
+```{r}
+data <- subset(data,treat=="Treatment")
+data <- subset(data,id!=100)
+data$rt_ml[data$rt_ml==0] <-NA
+
+clone_comb=NULL
+for (i in 1:nrow(data)) {
+  clone_comb[i]=paste(data$Clone.1[i],"_",data$Clone.2[i],sep="")
+}
+
+data$cc <- clone_comb
+data<-data %>% convert_as_factor(cc,Freq.clone.1,Rep)
+data$ln_cr <- log(data$algae_ml)
+data$ln_rt <- log(data$rt_ml)
+data$levo_eco <- log(abs(data$evo_eco))
+data$day_fact<-as.factor(data$day)
+data$logfreq <- logit(data$pred_freq_clone.1)
+data$fact_freq_udef <- as.factor(data$Freq.clone.2)
+```
+
+Checking which densities data points for CR are unrealisticly high
+For that I am exluding all data points at day 1 $\ge 1.5 10^6$ and for day 2 $\ge 2 10^6$ cells/ml
+```{r}
+data2<-data
+ext <- data[(data$algae_ml>=1500000 & data$day==1|data$algae_ml>=2000000 & data$day==2),]
+
+
+data[(data$algae_ml>=1500000 & data$day==1),]
+data[(data$algae_ml>=2000000 & data$day==2),]
+
+data2[(data$algae_ml>=1500000 & data$day==1|data$algae_ml>=2000000 & data$day==2),13]<- NA
+```
+## Analysis of algal density
+### Step 1: Plotting for distribution
+
+```{r}
+cr_data2 <- data2[complete.cases(data2$algae_ml),]
+
+ggplot(cr_data2, aes(x=algae_ml)) + geom_histogram()
+ggplot(cr_data2, aes(x=algae_ml)) + geom_density()
+
+min(cr_data2$algae_ml)
+max(cr_data2$algae_ml)
+#I will first check again for gamma and normal distribution
+#For normal
+m<-mean(cr_data2$algae_ml)
+v<-sqrt(var(cr_data2$algae_ml))
+gau<-data.frame(x=seq(1205,2840500,1000),y=length(cr_data2$algae_ml)*200000*dnorm(seq(1205,2840500,1000),m,v))
+
+#For gamma
+rate <- mean(cr_data2$algae_ml)/var(cr_data2$algae_ml)
+shape <- rate*mean(cr_data2$algae_ml)
+gam<-data.frame(x=seq(1205,2840500,1000),y=length(cr_data2$algae_ml)*200000*dgamma(seq(1205,2840500,1000),shape,rate))
+
+
+ggplot(cr_data2, aes(x=algae_ml)) +
+  geom_histogram()+
+  geom_line(data=gau,aes(x=x,y=y),color="red")+
+  geom_line(data=gam,aes(x=x,y=y),color="blue")
+
+descdist(cr_data2$algae_ml)
+```
+I went for a gamma distribution, because the normal distribution can also have negative values which is impossible to have with count_data2
+
+### Step 2: Statistical model
+```{r}
+contrasts(cr_data2$cc) <- "contr.sum"
+contrasts(cr_data2$Freq.clone.1) <- "contr.sum"
+cr_data2$day_fact <- as.factor(cr_data2$day)
+
+
+
+
+m_cr <- glmer(algae_ml ~  cc*Freq.clone.1*day+(1|Rep) ,family =Gamma(link = "log"),data=cr_data2)
+summary(m_cr)
+Anova(m_cr)
+```
+
+Predicting for the data points
+```{r}
+pre<-ext[c(26,6,11,8)]
+pre$new<-exp(predict(m_cr,newdata=pre))
+data3<-data
+data[(data$algae_ml>=1500000 & data$day==1|data$algae_ml>=2000000 & data$day==2),13] <- as.numeric(new)
+
+pre$old <- data3[(data3$algae_ml>=1500000 & data3$day==1|data3$algae_ml>=2000000 & data3$day==2),13]
+write.csv(pre,"../../Data/Empirical results/Oldvspredicted_data.csv")
+```
+
+Applying the geber method
+```{r}
+data$x_var = data$pred_freq_clone.2*data$algae_ml
+
+treat= subset(data,treat=="Treatment")
+id_list <- unique(treat$id)
+#treat <- subset(treat,day!=0)
+ALL<-list()
+lnames=NULL
+for (i in seq_along(id_list)) {
+  ALL[[i]]<-subset(treat,id==id_list[i])
+  lnames[i] <- paste0("ID",id_list[i])
+}
+names(ALL)<-lnames
+
+fit=list()
+sto=list()
+for (i in 1:length(ALL)){
+  fit[[i]] <- lm(ALL[[i]]$rt_growth~ALL[[i]]$x_var)
+  sto[[i]] <- c(coef(summary(fit[[i]]))[1, 1],coef(summary(fit[[i]]))[2,1])
+}
+
+
+ALL_comp=list()
+
+for (i in 1:length(ALL)){
+    ALL_comp[[i]] <- ALL[[i]]#[complete.cases(ALL[[i]]),]
+    ALL_comp[[i]]$evo <- NA
+    ALL_comp[[i]]$eco <- NA
+    ALL_comp[[i]]$eco_evo <- NA
+    ALL_comp[[i]]$evo_eco <- NA
+}
+for (i in 1:length(ALL)){
+  for (j in 1:nrow(ALL_comp[[i]])){
+    a=sto[[i]][1]+sto[[i]][2]*ALL_comp[[i]]$pred_freq_clone.2[j]*ALL_comp[[i]]$algae_ml[j]
+    
+    b=sto[[i]][1]+sto[[i]][2]*ALL_comp[[i]]$pred_freq_clone.2[j]*ALL_comp[[i]]$algae_ml[j+1]
+    
+    c=sto[[i]][1]+sto[[i]][2]*ALL_comp[[i]]$pred_freq_clone.2[j+1]*ALL_comp[[i]]$algae_ml[j]
+    
+    d=sto[[i]][1]+sto[[i]][2]*ALL_comp[[i]]$pred_freq_clone.2[j+1]*ALL_comp[[i]]$algae_ml[j+1]
+    
+  evo=((c-a)+(d-b))/2
+	eco=((b-a)+(d-c))/2
+	ALL_comp[[i]]$evo[j] <- evo
+	ALL_comp[[i]]$eco[j] <- eco
+	ALL_comp[[i]]$evo_eco[j] <- evo/eco
+  }
+}
+all_dat <- bind_rows(ALL_comp)
+all_dat$ln_cr <- log(all_dat$algae_ml)
+all_dat$ln_rt <- log(all_dat$rt_ml+1)
+
+data$levo_eco <- log(abs(data$evo_eco))
+mean(data$levo_eco,na.rm=T)
+```
+
+```{r}
+all_dat <- data
+# Deleting the data, same as from statistics
+all_dat <- subset(all_dat,id!=100)
+all_dat$rt_ml[all_dat$rt_ml==0] <-NA
+
+
+all_dat$levo_eco <- log(abs(all_dat$evo_eco))
+
+all_dat<- do.call(data.frame,                      # Replace Inf in data by NA
+                  lapply(all_dat,
+                         function(x) replace(x, is.infinite(x), NA)))
+
+all_dat$predprey <- all_dat$rt_ml/all_dat$algae_ml
+all_dat$logpp <- log(all_dat$predprey)
+all_dat$preypred <- all_dat$algae_ml/all_dat$rt_ml
+
+###########################################################################################################
+#Summing up the data for the different plotlinees
+
+all_sum <- all_dat %>% 
+  group_by(day,Clone.1,Clone.2,Freq.clone.2,fact_freq_udef) %>%
+  get_summary_stats(c(rt_ml,algae_ml,ln_cr,ln_rt,levo_eco,evo_eco,pred_freq_clone.2), type = "mean_se")
+
+all_sum_m <- all_dat %>% 
+  group_by(day,Clone.1,Clone.2) %>%
+  get_summary_stats(c(rt_ml,algae_ml,ln_cr,ln_rt,levo_eco,evo_eco,pred_freq_clone.2), type = "mean_se")
+
+########################################################################################################
+#Separating the whole data 
+
+CR1_6 <- data.frame()
+CR2_6 <- data.frame()
+CR1_7 <- data.frame()
+CR2_7 <- data.frame()
+
+for (i in 1:nrow(all_dat)){
+  if(all_dat$Clone.1[i]=="CR1" & all_dat$Clone.2[i]=="CR6") CR1_6<-bind_rows(CR1_6,all_dat[i,])
+  if(all_dat$Clone.1[i]=="CR1" & all_dat$Clone.2[i]=="CR7") CR1_7<-bind_rows(CR1_7,all_dat[i,])
+  if(all_dat$Clone.1[i]=="CR2" & all_dat$Clone.2[i]=="CR6") CR2_6<-bind_rows(CR2_6,all_dat[i,])
+  if(all_dat$Clone.1[i]=="CR2" & all_dat$Clone.2[i]=="CR7") CR2_7<-bind_rows(CR2_7,all_dat[i,])
+}
+
+#####################################################################################################
+#Separating the mean grouped by: day,Clone.1,Clone.2,Freq.clone.1,fact_freq_udef
+
+CR1_6_mean <- data.frame()
+CR2_6_mean <- data.frame()
+CR1_7_mean <- data.frame()
+CR2_7_mean <- data.frame()
+
+for (i in 1:nrow(all_sum)){
+  if(all_sum$Clone.1[i]=="CR1" & all_sum$Clone.2[i]=="CR6") CR1_6_mean<-bind_rows(CR1_6_mean,all_sum[i,])
+  if(all_sum$Clone.1[i]=="CR1" & all_sum$Clone.2[i]=="CR7") CR1_7_mean<-bind_rows(CR1_7_mean,all_sum[i,])
+  if(all_sum$Clone.1[i]=="CR2" & all_sum$Clone.2[i]=="CR6") CR2_6_mean<-bind_rows(CR2_6_mean,all_sum[i,])
+  if(all_sum$Clone.1[i]=="CR2" & all_sum$Clone.2[i]=="CR7") CR2_7_mean<-bind_rows(CR2_7_mean,all_sum[i,])
+}
+#####################################################################################################
+#Separating the mean grouped by: day,Clone.1,Clone.
+
+CR1_6_mean_m <- data.frame()
+CR2_6_mean_m <- data.frame()
+CR1_7_mean_m <- data.frame()
+CR2_7_mean_m <- data.frame()
+
+for (i in 1:nrow(all_sum_m)){
+  if(all_sum_m$Clone.1[i]=="CR1" & all_sum_m$Clone.2[i]=="CR6") CR1_6_mean_m<-bind_rows(CR1_6_mean_m,all_sum_m[i,])
+  if(all_sum_m$Clone.1[i]=="CR1" & all_sum_m$Clone.2[i]=="CR7") CR1_7_mean_m<-bind_rows(CR1_7_mean_m,all_sum_m[i,])
+  if(all_sum_m$Clone.1[i]=="CR2" & all_sum_m$Clone.2[i]=="CR6") CR2_6_mean_m<-bind_rows(CR2_6_mean_m,all_sum_m[i,])
+  if(all_sum_m$Clone.1[i]=="CR2" & all_sum_m$Clone.2[i]=="CR7") CR2_7_mean_m<-bind_rows(CR2_7_mean_m,all_sum_m[i,])
+}
+```
+
+```{r}
+p3<-ggplot(data=subset(CR1_6_mean,variable=="levo_eco"),aes(x=day,y=mean,color=fact_freq_udef))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+   geom_hline(aes(yintercept=0),size=1,color="black")+
+  ggtitle("CR1 with CR6 ")+
+  ylab("Log(|Evolution/Evcology|)")+xlab("Day")+
+  ylim(c(-4,4))+
+  labs(color = 'Starting freq of CR6')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        axis.text = element_text(size=37),
+        legend.position="none",
+        legend.title =  element_blank(),
+        axis.title=element_text(size=40))
+
+p3_2<-ggplot(subset(CR1_7_mean,variable=="levo_eco"),aes(x=day,y=mean,color=fact_freq_udef))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  xlim(c(-0.3,8.3))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  geom_hline(aes(yintercept=0),size=1,color="black")+
+  ggtitle("CR1 with CR7 ")+
+  ylab("Log(|Evolution/Evcology|)")+xlab("Day")+
+  ylim(c(-4,4))+
+  labs(color = 'Starting freq of CR7')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="none",
+        axis.title.x=element_text(size=40),
+        axis.text.x=element_text(size=37),
+        legend.text=element_text(size=40),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank())
+
+p3_1<-ggplot(subset(CR2_6_mean,variable=="levo_eco"),aes(x=day,y=mean,color=fact_freq_udef))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  theme_classic()+
+  geom_hline(aes(yintercept=0),size=1,color="black")+
+  ggtitle("CR2 with CR6")+
+  ylab("Log(|Evolution/Evcology|)")+xlab("Day")+
+  ylim(c(-4,4))+
+  xlim(c(-0.3,8.3))+
+  labs(color = 'Starting frequency of CR6')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        legend.position="none",
+        legend.title = element_text(size=40),
+        axis.title.x=element_text(size=40),
+        axis.text.x=element_text(size=37),
+        legend.text=element_text(size=40),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank())
+
+p3_3<-ggplot(subset(CR2_7_mean,variable=="levo_eco"),aes(x=day,y=mean,color=fact_freq_udef))+
+  geom_line(size=3,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  geom_point(size=4,position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4))+
+  theme_classic()+
+  xlim(c(-0.3,8.3))+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),position = position_jitterdodge(jitter.height=0,jitter.width=0.1,dodge.width = 0.4),size=1,width=0.5)+
+  geom_hline(aes(yintercept=0),size=1,color="black")+
+  ggtitle("CR2 with CR7")+
+  ylab("Log(|Evolution/Evcology|)")+xlab("Day")+
+  ylim(c(-4,4))+
+  labs(color = 'Starting frequency of CR7')+
+  theme(axis.ticks=element_line(size=4),
+        axis.ticks.length=unit(.2, "cm"),
+        axis.text = element_text(size=37),
+        legend.position="right",
+        legend.title = element_text(size=40),
+        axis.title.x=element_text(size=40),
+        axis.text.x=element_text(size=37),
+        legend.text=element_text(size=40),
+        axis.title.y=element_blank(),
+        axis.text.y=element_blank())
+
+figure <-p3+p3_1+p3_2+p3_3+ guide_area()+plot_layout(ncol=2)
+ggsave("../../Figures/Supplementary/Figure S2.pdf",figure,width=35,height=35)
+```
+
+Loading data
+```{r}
+traits <- read.csv("../../Data/Empirical Results/chlamydomonas_traits.csv")
+geb <- data
+#calculate the log (eco_evo)
+geb$levo_eco <- log(abs(geb$evo_eco))
+#take this point out, has been deleted as well in the statistics
+geb <- subset(geb,id!=100)
+#day as fact
+geb$day_fact <- as.factor(geb$day)
+
+
+# Calculating the trait distances with scaled traits
+
+
+#Scaling traits
+#Using min-max-values
+traits$ms_ing <- (traits$ingestion.rate..sec.-min(traits$ingestion.rate..sec.))/(max(traits$ingestion.rate..sec.)-min(traits$ingestion.rate..sec.))
+traits$ms_r <- (traits$growth-min(traits$growth))/(max(traits$growth)-min(traits$growth))
+
+
+CR2 <- list()
+for (i in 1:4){
+  CR2[[i]]= c(traits$ms_ing[i],traits$ms_r[i])
+}  
+
+trait_d <- data.frame(cc=c("CR1_CR6","CR1_CR7","CR2_CR6","CR2_CR7"),
+ms_ing_r=c(dist(rbind(CR2[[1]],CR2[[3]])),dist(rbind(CR2[[1]],CR2[[4]])),dist(rbind(CR2[[2]],CR2[[3]])),dist(rbind(CR2[[2]],CR2[[4]]))))
+
+trait_d$Clone.1 <- NULL
+trait_d$Clone.2 <- NULL
+for (i in 1:4){
+trait_d$Clone.1[i] =str_split_1(trait_d$cc[i],pattern="_")[1]
+trait_d$Clone.2[i] =str_split_1(trait_d$cc[i],pattern="_")[2]
+}
+
+
+#Summarizin the data frame
+
+
+#Summarizing by of each replicate
+geb_sum <- geb %>%
+  group_by(Clone.1,Clone.2,Freq.clone.1,Freq.clone.2,id) %>%
+  get_summary_stats(levo_eco,type = "mean_se")
+
+#Summarizing levo_eco of all values of cloncal combination
+geb_summ <- geb %>%
+  group_by(Clone.1,Clone.2) %>%
+  get_summary_stats(levo_eco,type = "mean_se")
+
+#Summarizing levo_eco of all values of cloncal combination
+geb_summ_day <- geb %>%
+  group_by(Clone.1,Clone.2,day) %>%
+  get_summary_stats(levo_eco,type = "mean_se")
+
+#Summarizing levo_eco of all values of cloncal combination
+geb_day <- geb %>%
+  group_by(day) %>%
+  get_summary_stats(levo_eco,type = "mean_se")
+
+
+#Adding the distance columns
+geb$mmdist_ing_r <- 0
+geb_sum$mmdist_ing_r <- 0
+geb_summ$mmdist_ing_r <- 0
+geb_summ_day$mmdist_ing_r <-0
+
+#Adding the scaled distance of the different clones in the traitspace to each summarized data frame
+for (i in 1:nrow(geb)){
+  for (j in 1:nrow(trait_d)){
+    if(geb$Clone.1[i]==trait_d$Clone.1[j] & geb$Clone.2[i]==trait_d$Clone.2[j]) 
+    {geb$mmdist_ing_r[i]=trait_d$ms_ing_r[j]}
+  }
+}
+
+for (i in 1:nrow(geb_sum)){
+  for (j in 1:nrow(trait_d)){
+    if(geb_sum$Clone.1[i]==trait_d$Clone.1[j] & geb_sum$Clone.2[i]==trait_d$Clone.2[j]) 
+    {geb_sum$mmdist_ing_r[i]=trait_d$ms_ing_r[j]}
+  }
+}
+
+for (i in 1:nrow(geb_summ)){
+  for (j in 1:nrow(trait_d)){
+    if(geb_summ$Clone.1[i]==trait_d$Clone.1[j] & geb_summ$Clone.2[i]==trait_d$Clone.2[j]) 
+    {geb_summ$mmdist_ing_r[i]=trait_d$ms_ing_r[j]}
+  }
+}
+
+
+geb_sum$cc <- paste(geb_sum$Clone.1,"_",geb_sum$Clone.2,sep="")
+geb_summ$cc <- paste(geb_summ$Clone.1,"_",geb_summ$Clone.2,sep="")
+geb$cc <- paste(geb$Clone.1,"_",geb$Clone.2,sep="")
+geb_summ_day$cc <- paste(geb_summ_day$Clone.1,"_",geb_summ_day$Clone.2,sep="")
+
+
+
+cor.test(geb_summ$mmdist_ing_r,geb_summ$mean,method="spearman")
+
+#Plot ov mean levo_eco vs distance in traitspace
+ggplot(geb_summ,aes(y=mean,x=mmdist_ing_r,color=cc))+
+  geom_point(size=5)+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),width=0.01)+
+  scale_color_manual(values=c("#11c3c1","#252A34","#FF2E63","#999c9e"))+
+  ylab("Average log(Ecology/Evolution) of clonal combination")+
+  xlab("Distance in traitspace of each clonal combination")+
+  theme_classic()+
+  #ylim(c(-1.7,1.5))+
+  ggtitle("levo_eco relative to trait distance")
+
+ggsave("../../Figures/Supplementary/Figures S3.pdf")
+```
+
+## Analysis of log(abs(evo over eco))  -->
+### Step 1: Plotting for distribution
+```{r}
+levo_eco_data<- do.call(data.frame,                      # Replace Inf in data by NA
+                  lapply(data,
+                         function(x) replace(x, is.infinite(x), NA)))
+
+levo_eco_data <- levo_eco_data[complete.cases(levo_eco_data$levo_eco),]
+
+ggplot(levo_eco_data, aes(x=logfreq)) + geom_histogram(binwidth=.1)
+ggplot(levo_eco_data, aes(x=logfreq)) + geom_density()
+
+descdist(levo_eco_data$levo_eco)
+
+min(levo_eco_data$levo_eco)
+max(levo_eco_data$levo_eco)
+#I will first check again for gamma and normal distribution
+#For normal
+m<-mean(levo_eco_data$levo_eco)
+v<-sqrt(var(levo_eco_data$levo_eco))
+gau<-data.frame(x=seq(-9,7,0.01),y=length(levo_eco_data$levo_eco)*0.1*dnorm(seq(-9,7,0.01),m,v),name="Gaussian")
+logn <-data.frame(x=seq(-9,7,0.01),y=length(levo_eco_data$levo_eco)*0.1*dlnorm(seq(-9,7,0.01)),name="Lognorml")
+
+#For gamma
+rate <- mean(levo_eco_data$levo_eco)/var(levo_eco_data$levo_eco)
+shape <- rate*mean(levo_eco_data$levo_eco)
+gam<-data.frame(x=seq(-9,7,0.01),y=length(levo_eco_data$levo_eco)*0.1*dgamma(seq(-9,7,0.01),shape,rate),name="Gamma")
+
+#For cauchy
+#cauchy<-data.frame(x=seq(0,1,0.01),y=length(levo_eco_data$levo_eco)*0.1*dcauchy(seq(0,1,0.01),1.0000000,0.136724),name="Cauchy")
+
+ggplot(levo_eco_data, aes(x=levo_eco)) + geom_histogram(binwidth=0.1)+
+  geom_line(data=gau,aes(x=x,y=y,color=name),color="red")
+  #geom_line(data=gam,aes(x=x,y=y,color=name),color="blue")+
+  #geom_line(data=logn,aes(x=x,y=y,color=name),color="black")
+```
+Gaussian, so normal, distribution seems really good here!
+
+### Step 2: Statistical model
+```{r}
+contrasts(levo_eco_data$cc) <- "contr.sum"
+contrasts(levo_eco_data$day_fact) <- "contr.sum"
+
+m_levo<-lmer(levo_eco~cc*day_fact+Freq.clone.1+(1|Rep),data=levo_eco_data,contrasts =contr.sum)
+m_levo<-lmer(levo_eco~cc*day_fact+(1|Rep),data=levo_eco_data,contrasts =contr.sum)
+
+matrix(c(-1,1,0,0,-1,0,1,0,-1,0,0,1),nrow=4)
+#anova(m_levo,m_levo2,test="LRT")
+summary(m_levo)
+Anova(m_levo)
+mean(data$levo_eco,na.rm=T)
+```
+
+### Step 3: Validating the model
+
+```{r}
+levo_eco_data$fit <- fitted(m_levo)
+
+ggplot(levo_eco_data,aes(x=levo_eco,y=fit))+
+  geom_point()+
+  geom_abline()
+
+levo_eco_data$res <- residuals(m_levo)
+
+qplot(levo_eco_data$res)
+ggplot(levo_eco_data, aes(sample=levo_eco_data$res))+stat_qq()+stat_qq_line()
+qplot(y=levo_eco_data$res,x=seq(1,length(levo_eco_data$res)),geom="point")+geom_hline(yintercept = 0)
+qplot(x=levo_eco_data$fit,y=levo_eco_data$res)
+
+
+plot(levo_eco_data$res~levo_eco_data$cc)
+```

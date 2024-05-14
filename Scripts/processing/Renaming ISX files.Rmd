@@ -1,0 +1,623 @@
+---
+title: "Renaming ISX files"
+author: "Ruben Hermann"
+date: '2022-06-24'
+output: html_document
+---
+
+In this code I will rename the data I have from the ISX (Imagestream). Images were taken from each well of a plate and the feature values of all images from a well are saved in a separate file. Therefore, I will use the files in the general ISX folder in which I decoded the contents of each well and thill rename each file according to the starting frequency of the clones present in the treatment.
+.
+```{r setup}
+rm(list=ls())
+library(tidyverse)
+```
+
+## Load in the sorting files
+In the sorting files I wrote down in an excel file which treatment is in each well of a given ISX plate. All pipetting mistakes were also accounted for and switched in the file if needed.
+
+```{r}
+setwd('../../Data/ISX')
+run1_treat <- read.csv("Run 1 treatments.csv")
+run2_treat <- read.csv("Run 2 treatments.csv")
+run3_treat <- read.csv("Run 3 treatments.csv")
+
+run1_cont <- read.csv("Run 1 controls.csv")
+run2_cont <- read.csv("Run 2 controls.csv")
+run3_cont <- read.csv("Run 3 controls.csv")
+```
+Now I want to create loops which change, such that the well name will be replace with the replicate name _ day _ run (e.g. A01 would be renamed to 3_day1_run1)
+
+I do it one loop for one folder, there may be a better approach but this is the most effective I could think of quickly. So it will be 13 loops for all the treatments + four more for the controls.
+
+### Renaming Folder Run 1 Day 1
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 1 Day 1')
+run1_day1<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run1_day1[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run1_name_d1 <- subset(run1_treat,Day==1)
+names(run1_day1)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run1_day1)){
+  for (k in 1:nrow(run1_name_d1)){
+      name <- paste(run1_name_d1$Well[k],"_4.txt",sep="")
+      if (name==names(run1_day1)[i]) {new_name[i]=paste(run1_name_d1$ID[k],"_day1_run1.csv",sep="")}
+  }
+}
+setwd('../../../Renamed feature files/Treatment')
+names(run1_day1)<-new_name
+for (i in 1:length(run1_day1)){
+  write.csv(run1_day1[[i]],file=names(run1_day1[i]))
+}
+
+```
+
+### Renaming Folder Run 1 Day 2
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 1 Day 2')
+run1_day2<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run1_day2[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run1_name_d2 <- subset(run1_treat,Day==2)
+names(run1_day2)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run1_day2)){
+  for (k in 1:nrow(run1_name_d2)){
+      name <- paste(run1_name_d2$Well[k],"_5.txt",sep="")
+      if (name==names(run1_day2)[i]) {new_name[i]=paste(run1_name_d2$ID[k],"_day2_run1.csv",sep="")}
+  }
+}
+names(run1_day2)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run1_day2)){
+  write.csv(run1_day2[[i]],file=names(run1_day2[i]))
+}
+
+```
+
+### Renaming Folder Run 1 Day 3+4
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 1 Day 3+4')
+run1_day34<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run1_day34[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run1_name_d34 <- subset(run1_treat,Day==3 | Day==4)
+names(run1_day34)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run1_day34)){
+  for (k in 1:nrow(run1_name_d34)){
+    if (run1_name_d34$Day[k]==3) {
+      name <- paste(run1_name_d34$Well[k],"_4.txt",sep="")
+      if (name==names(run1_day34)[i]) {new_name[i]=paste(run1_name_d34$ID[k],"_day3_run1.csv",sep="")}}
+    if (run1_name_d34$Day[k]==4){
+      name <- paste(run1_name_d34$Well[k],"_5.txt",sep="")
+      if (name==names(run1_day34)[i]) {new_name[i]=paste(run1_name_d34$ID[k],"_day4_run1.csv",sep="")}}
+  }
+}
+names(run1_day34)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run1_day34)){
+  write.csv(run1_day34[[i]],file=names(run1_day34[i]))
+}
+
+```
+
+
+### Renaming Folder Run 1 Day 5+6
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 1 Day 5+6')
+run1_day56<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run1_day56[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run1_name_d56 <- subset(run1_treat,Day==5 | Day==6)
+names(run1_day56)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run1_day56)){
+  for (k in 1:nrow(run1_name_d56)){
+    if (run1_name_d56$Day[k]==5) {
+      name <- paste(run1_name_d56$Well[k],"_5.txt",sep="")
+      if (name==names(run1_day56)[i]) {new_name[i]=paste(run1_name_d56$ID[k],"_day5_run1.csv",sep="")}}
+    if (run1_name_d56$Day[k]==6){
+      name <- paste(run1_name_d56$Well[k],"_5.txt",sep="")
+      if (name==names(run1_day56)[i]) {new_name[i]=paste(run1_name_d56$ID[k],"_day6_run1.csv",sep="")}}
+  }
+}
+
+names(run1_day56)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run1_day56)){
+  write.csv(run1_day56[[i]],file=names(run1_day56[i]))
+}
+
+```
+
+### Renaming Folder Run 1 Day 7+8
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 1 Day 7+8')
+run1_day78<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run1_day78[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run1_name_d78 <- subset(run1_treat,Day==7 | Day==8)
+names(run1_day78)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run1_day78)){
+  for (k in 1:nrow(run1_name_d78)){
+    if (run1_name_d78$Day[k]==7) {
+      name <- paste(run1_name_d78$Well[k],"_5.txt",sep="")
+      if (name==names(run1_day78)[i]) {new_name[i]=paste(run1_name_d78$ID[k],"_day7_run1.csv",sep="")}}
+    if (run1_name_d78$Day[k]==8){
+      name <- paste(run1_name_d78$Well[k],"_5.txt",sep="")
+      if (name==names(run1_day78)[i]) {new_name[i]=paste(run1_name_d78$ID[k],"_day8_run1.csv",sep="")}}
+  }
+}
+names(run1_day78)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run1_day78)){
+  write.csv(run1_day78[[i]],file=names(run1_day78[i]))
+}
+
+```
+###################################################################################################################################################################################################################################################################################################################################################
+## Now Run 2
+### Renaming Folder Run 2 Day 1+2
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 2 Day 1+2')
+run2_day12<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run2_day12[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run2_name_d12 <- subset(run2_treat,Day==1 | Day==2)
+names(run2_day12)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run2_day12)){
+  for (k in 1:nrow(run2_name_d12)){
+    if (run2_name_d12$Day[k]==1) {
+      name <- paste(run2_name_d12$Well[k],"_5.txt",sep="")
+      if (name==names(run2_day12)[i]) {new_name[i]=paste(run2_name_d12$ID[k],"_day1_run2.csv",sep="")}}
+    if (run2_name_d12$Day[k]==2){
+      name <- paste(run2_name_d12$Well[k],"_5.txt",sep="")
+      if (name==names(run2_day12)[i]) {new_name[i]=paste(run2_name_d12$ID[k],"_day2_run2.csv",sep="")}}
+  }
+}
+names(run2_day12)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run2_day12)){
+  write.csv(run2_day12[[i]],file=names(run2_day12[i]))
+}
+
+
+```
+
+
+### Renaming Folder Run 2 Day 3+4
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 2 Day 3+4')
+run2_day34<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run2_day34[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run2_name_d34 <- subset(run2_treat,Day==3 | Day==4)
+names(run2_day34)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run2_day34)){
+  for (k in 1:nrow(run2_name_d34)){
+    if (run2_name_d34$Day[k]==3) {
+      name <- paste(run2_name_d34$Well[k],"_5.txt",sep="")
+      if (name==names(run2_day34)[i]) {new_name[i]=paste(run2_name_d34$ID[k],"_day3_run2.csv",sep="")}}
+    if (run2_name_d34$Day[k]==4){
+      name <- paste(run2_name_d34$Well[k],"_5.txt",sep="")
+      if (name==names(run2_day34)[i]) {new_name[i]=paste(run2_name_d34$ID[k],"_day4_run2.csv",sep="")}}
+  }
+}
+names(run2_day34)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run2_day34)){
+  write.csv(run2_day34[[i]],file=names(run2_day34[i]))
+}
+
+```
+
+
+### Renaming Folder Run 2 Day 5+6
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 2 Day 5+6')
+run2_day56<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run2_day56[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run2_name_d56 <- subset(run2_treat,Day==5 | Day==6)
+names(run2_day56)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run2_day56)){
+  for (k in 1:nrow(run2_name_d56)){
+    if (run2_name_d56$Day[k]==5) {
+      name <- paste(run2_name_d56$Well[k],"_5.txt",sep="")
+      if (name==names(run2_day56)[i]) {new_name[i]=paste(run2_name_d56$ID[k],"_day5_run2.csv",sep="")}}
+    if (run2_name_d56$Day[k]==6){
+      name <- paste(run2_name_d56$Well[k],"_5.txt",sep="")
+      if (name==names(run2_day56)[i]) {new_name[i]=paste(run2_name_d56$ID[k],"_day6_run2.csv",sep="")}}
+  }
+}
+
+names(run2_day56)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run2_day56)){
+  write.csv(run2_day56[[i]],file=names(run2_day56[i]))
+}
+
+```
+
+### Renaming Folder Run 2 Day 7+8
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 2 Day 7+8')
+run2_day78<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run2_day78[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run2_name_d78 <- subset(run2_treat,Day==7 | Day==8)
+names(run2_day78)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run2_day78)){
+  for (k in 1:nrow(run2_name_d78)){
+    if (run2_name_d78$Day[k]==7) {
+      name <- paste(run2_name_d78$Well[k],"_5 .txt",sep="")
+      if (name==names(run2_day78)[i]) {new_name[i]=paste(run2_name_d78$ID[k],"_day7_run2.csv",sep="")}}
+    if (run2_name_d78$Day[k]==8){
+      name <- paste(run2_name_d78$Well[k],"_5 .txt",sep="")
+      if (name==names(run2_day78)[i]) {new_name[i]=paste(run2_name_d78$ID[k],"_day8_run2.csv",sep="")}}
+  }
+}
+names(run2_day78)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run2_day78)){
+  write.csv(run2_day78[[i]],file=names(run2_day78[i]))
+}
+
+```
+
+###################################################################################################################################################################################################################################################################################################################################################
+## Now Run 3
+### Renaming Folder Run 3 Day 1+2
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 3 Day 1+2')
+run3_day12<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run3_day12[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run3_name_d12 <- subset(run3_treat,Day==1 | Day==2)
+names(run3_day12)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run3_day12)){
+  for (k in 1:nrow(run3_name_d12)){
+    if (run3_name_d12$Day[k]==1) {
+      name <- paste(run3_name_d12$Well[k],"_5.txt",sep="")
+      if (name==names(run3_day12)[i]) {new_name[i]=paste(run3_name_d12$ID[k],"_day1_run3.csv",sep="")}}
+    if (run3_name_d12$Day[k]==2){
+      name <- paste(run3_name_d12$Well[k],"_5.txt",sep="")
+      if (name==names(run3_day12)[i]) {new_name[i]=paste(run3_name_d12$ID[k],"_day2_run3.csv",sep="")}}
+  }
+}
+names(run3_day12)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run3_day12)){
+  write.csv(run3_day12[[i]],file=names(run3_day12[i]))
+}
+
+
+```
+
+
+### Renaming Folder Run 3 Day 3+4
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 3 Day 3+4')
+run3_day34<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run3_day34[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run3_name_d34 <- subset(run3_treat,Day==3 | Day==4)
+names(run3_day34)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run3_day34)){
+  for (k in 1:nrow(run3_name_d34)){
+    if (run3_name_d34$Day[k]==3) {
+      name <- paste(run3_name_d34$Well[k],"_5.txt",sep="")
+      if (name==names(run3_day34)[i]) {new_name[i]=paste(run3_name_d34$ID[k],"_day3_run3.csv",sep="")}}
+    if (run3_name_d34$Day[k]==4){
+      name <- paste(run3_name_d34$Well[k],"_5.txt",sep="")
+      if (name==names(run3_day34)[i]) {new_name[i]=paste(run3_name_d34$ID[k],"_day4_run3.csv",sep="")}}
+  }
+}
+names(run3_day34)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run3_day34)){
+  write.csv(run3_day34[[i]],file=names(run3_day34[i]))
+}
+
+```
+
+
+### Renaming Folder Run 3 Day 5+6
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 3 Day 5+6')
+run3_day56<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run3_day56[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run3_name_d56 <- subset(run3_treat,Day==5 | Day==6)
+names(run3_day56)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run3_day56)){
+  for (k in 1:nrow(run3_name_d56)){
+    if (run3_name_d56$Day[k]==5) {
+      name <- paste(run3_name_d56$Well[k],"_5.txt",sep="")
+      if (name==names(run3_day56)[i]) {new_name[i]=paste(run3_name_d56$ID[k],"_day5_run3.csv",sep="")}}
+    if (run3_name_d56$Day[k]==6){
+      name <- paste(run3_name_d56$Well[k],"_5.txt",sep="")
+      if (name==names(run3_day56)[i]) {new_name[i]=paste(run3_name_d56$ID[k],"_day6_run3.csv",sep="")}}
+  }
+}
+
+names(run3_day56)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run3_day56)){
+  write.csv(run3_day56[[i]],file=names(run3_day56[i]))
+}
+
+```
+
+### Renaming Folder Run 3 Day 7+8
+
+```{r}
+setwd('../../Data/ISX/Feature files/Treatment/Run 3 Day 7+8')
+run3_day78<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  run3_day78[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+run3_name_d78 <- subset(run3_treat,Day==7 | Day==8)
+names(run3_day78)<-temp
+
+new_name=NULL
+
+for (i in 1:length(run3_day78)){
+  for (k in 1:nrow(run3_name_d78)){
+    if (run3_name_d78$Day[k]==7) {
+      name <- paste(run3_name_d78$Well[k],"_5.txt",sep="")
+      if (name==names(run3_day78)[i]) {new_name[i]=paste(run3_name_d78$ID[k],"_day7_run3.csv",sep="")}}
+    if (run3_name_d78$Day[k]==8){
+      name <- paste(run3_name_d78$Well[k],"_5.txt",sep="")
+      if (name==names(run3_day78)[i]) {new_name[i]=paste(run3_name_d78$ID[k],"_day8_run3.csv",sep="")}}
+  }
+}
+names(run3_day78)<-new_name
+setwd('../../../Renamed feature files/Treatment')
+
+for (i in 1:length(run3_day78)){
+  write.csv(run3_day78[[i]],file=names(run3_day78[i]))
+}
+
+```
+
+###################################################################################################################################################################################################################################################################################################################################################
+## Now The controls
+### Renaming Control Run 1 Day 1-8
+
+```{r}
+setwd('../../Data/ISX/Feature files/Controls/Run 1 Day 1+8')
+cont1_day18<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  cont1_day18[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+cont1__name_d18 <- run1_cont
+names(cont1_day18)<-temp
+
+new_name=NULL
+
+for (i in 1:length(cont1_day18)){
+  for (k in 1:nrow(cont1__name_d18)){
+          name <- paste(cont1__name_d18$Well[k],"_5.txt",sep="")
+    if (cont1__name_d18$Day[k]==1 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day1_cont_run1.csv",sep="")}
+    if (cont1__name_d18$Day[k]==2 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day2_cont_run1.csv",sep="")}
+    if (cont1__name_d18$Day[k]==3 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day3_cont_run1.csv",sep="")}
+    if (cont1__name_d18$Day[k]==4 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day4_cont_run1.csv",sep="")}
+    if (cont1__name_d18$Day[k]==5 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day5_cont_run1.csv",sep="")}
+    if (cont1__name_d18$Day[k]==6 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day6_cont_run1.csv",sep="")}
+    if (cont1__name_d18$Day[k]==7 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day7_cont_run1.csv",sep="")}
+    if (cont1__name_d18$Day[k]==8 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day8_cont_run1.csv",sep="")}
+
+          name <- paste(cont1__name_d18$Well[k],"_10.txt",sep="")
+    if (cont1__name_d18$Day[k]==1 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day1_cont_run1_10min.csv",sep="")}
+    if (cont1__name_d18$Day[k]==2 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day2_cont_run1_10min.csv",sep="")}
+    if (cont1__name_d18$Day[k]==3 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day3_cont_run1_10min.csv",sep="")}
+    if (cont1__name_d18$Day[k]==4 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day4_cont_run1_10min.csv",sep="")}
+    if (cont1__name_d18$Day[k]==5 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day5_cont_run1_10min.csv",sep="")}
+    if (cont1__name_d18$Day[k]==6 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day6_cont_run1_10min.csv",sep="")}
+    if (cont1__name_d18$Day[k]==7 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day7_cont_run1_10min.csv",sep="")}
+    if (cont1__name_d18$Day[k]==8 & name==names(cont1_day18)[i]) {new_name[i]=paste(cont1__name_d18$ID[k],"_day8_cont_run1_10min.csv",sep="")}
+  }  
+}
+names(cont1_day18)<-new_name
+setwd('../../../Renamed feature files/Controls')
+
+for (i in 1:length(cont1_day18)){
+  write.csv(cont1_day18[[i]],file=names(cont1_day18[i]))
+}
+
+```
+### Renaming Control Run 2 Day 1-4
+
+```{r}
+setwd('../../Data/ISX/Feature files/Controls/Run 2 Day 1+4')
+cont2_day14<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  cont2_day14[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+cont2__name_d14 <- subset(run2_cont,Day==1|Day==2|Day==3|Day==4)
+names(cont2_day14)<-temp
+
+new_name=NULL
+
+for (i in 1:length(cont2_day14)){
+  for (k in 1:nrow(cont2__name_d14)){
+          name <- paste(cont2__name_d14$Well[k],"_5.txt",sep="")
+    if (cont2__name_d14$Day[k]==1 & name==names(cont2_day14)[i]) {new_name[i]=paste(cont2__name_d14$ID[k],"_day1_cont_run2.csv",sep="")}
+    if (cont2__name_d14$Day[k]==2 & name==names(cont2_day14)[i]) {new_name[i]=paste(cont2__name_d14$ID[k],"_day2_cont_run2.csv",sep="")}
+    if (cont2__name_d14$Day[k]==3 & name==names(cont2_day14)[i]) {new_name[i]=paste(cont2__name_d14$ID[k],"_day3_cont_run2.csv",sep="")}
+    if (cont2__name_d14$Day[k]==4 & name==names(cont2_day14)[i]) {new_name[i]=paste(cont2__name_d14$ID[k],"_day4_cont_run2.csv",sep="")}
+  }
+}
+names(cont2_day14)<-new_name
+setwd('../../../Renamed feature files/Controls')
+
+for (i in 1:length(cont2_day14)){
+  write.csv(cont2_day14[[i]],file=names(cont2_day14[i]))
+}
+
+```
+
+### Renaming Control Run 2 Day 5-8
+
+```{r}
+setwd('../../Data/ISX/Feature files/Controls/Run 2 Day 5+8')
+cont2_day58<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  cont2_day58[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+cont2__name_d58 <- subset(run2_cont,Day==5|Day==6|Day==7|Day==8)
+names(cont2_day58)<-temp
+
+new_name=NULL
+
+for (i in 1:length(cont2_day58)){
+  for (k in 1:nrow(cont2__name_d58)){
+          name <- paste(cont2__name_d58$Well[k],"_5.txt",sep="")
+    if (cont2__name_d58$Day[k]==5 & name==names(cont2_day58)[i]) {new_name[i]=paste(cont2__name_d58$ID[k],"_day1_cont_run2.csv",sep="")}
+    if (cont2__name_d58$Day[k]==6 & name==names(cont2_day58)[i]) {new_name[i]=paste(cont2__name_d58$ID[k],"_day2_cont_run2.csv",sep="")}
+    if (cont2__name_d58$Day[k]==7 & name==names(cont2_day58)[i]) {new_name[i]=paste(cont2__name_d58$ID[k],"_day3_cont_run2.csv",sep="")}
+    if (cont2__name_d58$Day[k]==8 & name==names(cont2_day58)[i]) {new_name[i]=paste(cont2__name_d58$ID[k],"_day4_cont_run2.csv",sep="")}
+  }
+}
+names(cont2_day58)<-new_name
+setwd('../../../Renamed feature files/Controls')
+
+for (i in 1:length(cont2_day58)){
+  write.csv(cont2_day58[[i]],file=names(cont2_day58[i]))
+}
+
+```
+
+
+
+
+### Renaming Control Run 3 Day 1-8
+
+```{r}
+setwd('../../Data/ISX/Feature files/Controls/Run 3 Day 1+8')
+cont3_day18<- NULL
+temp= list.files(pattern=".txt")
+for (i in 1:length(temp)){
+  cont3_day18[[i]]<-read.delim(temp[i], skip = 4, dec = '.')
+  }
+cont3__name_d18 <- run3_cont
+names(cont3_day18)<-temp
+
+new_name=NULL
+
+for (i in 1:length(cont3_day18)){
+  for (k in 1:nrow(cont3__name_d18)){
+          name <- paste(cont3__name_d18$Well[k],"_5.txt",sep="")
+    if (cont3__name_d18$Day[k]==1 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day1_cont_run3.csv",sep="")}
+    if (cont3__name_d18$Day[k]==2 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day2_cont_run3.csv",sep="")}
+    if (cont3__name_d18$Day[k]==3 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day3_cont_run3.csv",sep="")}
+    if (cont3__name_d18$Day[k]==4 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day4_cont_run3.csv",sep="")}
+    if (cont3__name_d18$Day[k]==5 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day5_cont_run3.csv",sep="")}
+    if (cont3__name_d18$Day[k]==6 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day6_cont_run3.csv",sep="")}
+    if (cont3__name_d18$Day[k]==7 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day7_cont_run3.csv",sep="")}
+    if (cont3__name_d18$Day[k]==8 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day8_cont_run3.csv",sep="")}
+          
+          name <- paste(cont3__name_d18$Well[k],"_10.txt",sep="")
+    if (cont3__name_d18$Day[k]==1 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day1_cont_run3_10min.csv",sep="")}
+    if (cont3__name_d18$Day[k]==2 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day2_cont_run3_10min.csv",sep="")}
+    if (cont3__name_d18$Day[k]==3 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day3_cont_run3_10min.csv",sep="")}
+    if (cont3__name_d18$Day[k]==4 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day4_cont_run3_10min.csv",sep="")}
+    if (cont3__name_d18$Day[k]==5 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day5_cont_run3_10min.csv",sep="")}
+    if (cont3__name_d18$Day[k]==6 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day6_cont_run3_10min.csv",sep="")}
+    if (cont3__name_d18$Day[k]==7 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day7_cont_run3_10min.csv",sep="")}
+    if (cont3__name_d18$Day[k]==8 & name==names(cont3_day18)[i]) {new_name[i]=paste(cont3__name_d18$ID[k],"_day8_cont_run3_10min.csv",sep="")}          
+  }
+}
+names(cont3_day18)<-new_name
+setwd('../../../Renamed feature files/Controls')
+
+for (i in 1:length(cont3_day18)){
+  write.csv(cont3_day18[[i]],file=names(cont3_day18[i]))
+}
+
+```

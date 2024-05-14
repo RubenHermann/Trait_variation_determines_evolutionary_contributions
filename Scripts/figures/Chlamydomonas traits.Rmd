@@ -1,0 +1,103 @@
+---
+title: "Chlamydomonas traits"
+author: "Ruben Hermann"
+date: "2023-08-16"
+output: html_document
+---
+Here I assemble the relative influence of evolution over ecology and the trait values of each clone, to create the plot.
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(rstatix)
+library(emmeans)
+library(easystats)
+```
+
+Loading data
+```{r}
+traits <- read.csv("../../Data/Empirical results/chlamydomonas_traits.csv")
+geb <- read.csv("../../Data/Empirical results/final_data.csv")
+#calculate the log (eco_evo)
+geb$levo_eco <- log(abs(geb$evo_eco))
+#take this point out, has been deleted as well in the statistics
+geb <- subset(geb,id!=100)
+#day as fact
+geb$day_fact <- as.factor(geb$day)
+```
+
+Calculating the trait distances with scaled traits
+
+```{r}
+#Scaling traits
+#Using min-max-values
+traits$ms_ing <- (traits$ingestion.rate..sec.-min(traits$ingestion.rate..sec.))/(max(traits$ingestion.rate..sec.)-min(traits$ingestion.rate..sec.))
+traits$ms_r <- (traits$growth-min(traits$growth))/(max(traits$growth)-min(traits$growth))
+
+
+CR2 <- list()
+for (i in 1:4){
+  CR2[[i]]= c(traits$ms_ing[i],traits$ms_r[i])
+}  
+
+trait_d <- data.frame(cc=c("CR1_CR6","CR1_CR7","CR2_CR6","CR2_CR7"),
+ms_ing_r=c(dist(rbind(CR2[[1]],CR2[[3]])),dist(rbind(CR2[[1]],CR2[[4]])),dist(rbind(CR2[[2]],CR2[[3]])),dist(rbind(CR2[[2]],CR2[[4]]))))
+
+trait_d$Clone.1 <- NULL
+trait_d$Clone.2 <- NULL
+for (i in 1:4){
+trait_d$Clone.1[i] =str_split_1(trait_d$cc[i],pattern="_")[1]
+trait_d$Clone.2[i] =str_split_1(trait_d$cc[i],pattern="_")[2]
+}
+```
+
+Summarizing the data frame
+
+```{r}
+#Summarizing levo_eco of all values of cloncal combination
+geb_summ <- geb %>%
+  group_by(Clone.1,Clone.2) %>%
+  get_summary_stats(levo_eco,type = "mean_se")
+
+#Adding the distance columns
+geb_summ$mmdist_ing_r <- 0
+
+#Adding the scaled distance of the different clones in the traitspace to each summarized data frame
+for (i in 1:nrow(geb_summ)){
+  for (j in 1:nrow(trait_d)){
+    if(geb_summ$Clone.1[i]==trait_d$Clone.1[j] & geb_summ$Clone.2[i]==trait_d$Clone.2[j]) 
+    {geb_summ$mmdist_ing_r[i]=trait_d$ms_ing_r[j]}
+  }
+}
+
+geb_summ$cc <- paste(geb_summ$Clone.1,"_",geb_summ$Clone.2,sep="")
+```
+
+```{r}
+#Overall correlation between levo_eco against distance in trait-space
+cor.test(geb_summ$mmdist_ing_r,geb_summ$mean,method="spearman")
+
+#Plot ov mean levo_eco vs distance in traitspace
+p1<-ggplot(geb_summ,aes(y=mean,x=mmdist_ing_r,color=cc))+
+  geom_point(size=5)+
+  geom_errorbar(aes(ymin=mean-se,ymax=mean+se),width=0.01)+
+  scale_color_manual(values=c("#11c3c1","#252A34","#FF2E63","#999c9e"))+
+  ylab("Average log(Evolution/Ecology) of clonal combination")+
+  xlab("Distance in traitspace of each clonal combination")+
+  theme_classic()+
+  #ylim(c(-1.7,1.5))+
+  ggtitle("levo_eco relative to trait distance")
+
+ggsave("../../Figures/Main/Figure 3a.pdf")
+
+#Plot traitspace according to toms data
+p2<-ggplot(traits,aes(x=growth,y=ingestion.rate..sec.,color=clone))+
+  geom_point(size=3,color=c("darkblue","blue","green","darkgreen"))+
+  ylab("Max ingestion of rotifer [sec]")+
+  xlab("Max algal growth rate [d-1]")+
+  theme_classic()+
+  ggtitle("Traitspace of algal clones")+
+  geom_errorbar(aes(ymin=ing_min,ymax=ing_max),width=0,color=c("darkblue","blue","green","darkgreen"))+
+  geom_errorbarh(aes(xmin=growth_min,xmax=growth_max),height=0,color=c("darkblue","blue","green","darkgreen"))
+
+ggsave("../../Figures/Main/Figure 1.pdf")
+```

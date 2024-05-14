@@ -1,0 +1,347 @@
+---
+title: "Analysis of time series"
+author: "Ruben Hermann"
+date: "2022-08-18"
+output: html_document
+---
+
+```{r setup}
+rm(list=ls())
+library(tidyverse)
+library(rstatix)
+library(fitdistrplus)
+library(nlme)
+library(lme4)
+data <- read.csv("../../Data/Empirical results/final_data.csv")
+logit <- qlogis
+```
+## Transforming
+separating the treatments, as I am not interested in the controls
+cc: the clone combination in a single column
+ln_cr: Natural log of algal density
+ln_rt: Natural log of rotifer density
+rt_data: including only data of interest for the statistcs:
+Rep= replicate number (Random)
+cc: Clone combination  (Treatment, fixed)
+Freq.clone.1= starting frequency of the defended clone (Treatment, fixed)
+ln_cr: density of algae (variable)
+ln_rt: Density of rotifer (variable)
+eco_evo: Log(abs(Ecological effect/Evolutionary effect)) calculated by geber method (variable)
+rt_growth: Rotifer growth rate (variable)
+logfreq: a logit transformation with the frequency data --> to create a "normal" distribution fo analysis
+
+Im deleting Rep 10 (id100) from the CR1_CR7 + 0.7 (CR1) starting frequency as the rotifers failed to establish in this replicate
+And Day 5 of id 181 (Rep 7) from CR1_CR6 + 0.6 (CR1) sarting frequency is also deleted, as no rotifers were acounted for
+```{r}
+data <- subset(data,treat=="Treatment")
+data <- subset(data,id!=100)
+data$rt_ml[data$rt_ml==0] <-NA
+
+clone_comb=NULL
+for (i in 1:nrow(data)) {
+  clone_comb[i]=paste(data$Clone.1[i],"_",data$Clone.2[i],sep="")
+}
+
+data$cc <- clone_comb
+data<-data %>% convert_as_factor(cc,Freq.clone.2,Rep)
+data$ln_cr <- log(data$algae_ml)
+data$ln_rt <- log(data$rt_ml)
+data$leco_evo <- log(abs(data$eco_evo))
+data$levo_eco <- log(abs(data$evo_eco))
+data$day_fact<-as.factor(data$day)
+data$logfreq <- logit(data$pred_freq_clone.2)
+
+mean(data$levo_eco,na.rm=T)
+```
+## Analysis of algal density
+### Step 1: Plotting for distribution
+
+```{r}
+cr_data <- data[complete.cases(data$algae_ml),]
+
+ggplot(cr_data, aes(x=algae_ml)) + geom_histogram()
+ggplot(cr_data, aes(x=algae_ml)) + geom_density()
+
+min(cr_data$algae_ml)
+max(cr_data$algae_ml)
+#I will first check again for gamma and normal distribution
+#For normal
+m<-mean(cr_data$algae_ml)
+v<-sqrt(var(cr_data$algae_ml))
+gau<-data.frame(x=seq(1205,2840500,1000),y=length(cr_data$algae_ml)*200000*dnorm(seq(1205,2840500,1000),m,v))
+
+#For gamma
+rate <- mean(cr_data$algae_ml)/var(cr_data$algae_ml)
+shape <- rate*mean(cr_data$algae_ml)
+gam<-data.frame(x=seq(1205,2840500,1000),y=length(cr_data$algae_ml)*200000*dgamma(seq(1205,2840500,1000),shape,rate))
+
+
+ggplot(cr_data, aes(x=algae_ml)) +
+  geom_histogram()+
+  geom_line(data=gau,aes(x=x,y=y),color="red")+
+  geom_line(data=gam,aes(x=x,y=y),color="blue")
+
+descdist(cr_data$algae_ml)
+```
+I went for a gamma distribution, because the normal distribution can also have negative values which is impossible to have with count_data
+
+### Step 2: Statistical model
+```{r}
+contrasts(cr_data$cc) <- "contr.sum"
+contrasts(cr_data$Freq.clone.2) <- "contr.sum"
+cr_data$day_fact <- as.factor(cr_data$day)
+
+
+
+
+m_cr <- glmer(algae_ml ~  cc*Freq.clone.2*day+(1|Rep) ,family =Gamma(link = "log"),data=cr_data)
+
+summary(m_cr)
+Anova(m_cr)
+```
+
+### Step 3: Validating the model
+```{r}
+cr_data$fit <- fitted(m_cr)
+
+ggplot(cr_data,aes(x=algae_ml,y=fit))+
+  geom_point()+
+  geom_abline()
+
+cr_data$res <- residuals(m_cr)
+
+qplot(cr_data$res)
+ggplot(cr_data, aes(sample=cr_data$res))+stat_qq()+stat_qq_line()
+qplot(y=cr_data$res,x=seq(1,length(cr_data$res)),geom="point")+geom_hline(yintercept = 0)
+qplot(x=cr_data$fit,y=cr_data$res)
+
+
+plot(cr_data$res~cr_data$cc)
+plot(cr_data$res~cr_data$Freq.clone.2)
+plot(cr_data$res~cr_data$day_fac)
+```
+This looks good enough for now!
+ 
+## Analysis of rotifer density
+ 
+### Step 1: Plotting for distribution
+```{r}
+rt_data <- data[complete.cases(data$rt_ml),]
+
+ggplot(rt_data, aes(x=ln_rt)) + geom_histogram(binwidth=.5)
+ggplot(rt_data, aes(x=ln_rt)) + geom_density()
+
+
+min(rt_data$ln_rt)
+max(rt_data$ln_rt)
+#I will first check again for gamma and normal distribution
+#For normal
+m<-mean(rt_data$ln_rt)
+v<-sqrt(var(rt_data$ln_rt))
+gau<-data.frame(x=seq(-2,5,0.01),y=length(rt_data$ln_rt)*0.1*dnorm(seq(-2,5,0.01),m,v))
+
+#For gamma
+rate <- mean(rt_data$ln_rt)/var(rt_data$ln_rt)
+shape <- rate*mean(rt_data$ln_rt)
+gam<-data.frame(x=seq(-2,5,0.01),y=length(rt_data$ln_rt)*0.1*dgamma(seq(-2,5,0.01),shape,rate))
+
+
+ggplot(rt_data, aes(x=ln_rt)) + geom_histogram(binwidth=0.1)+
+  geom_line(data=gau,aes(x=x,y=y),color="red")+
+  geom_line(data=gam,aes(x=x,y=y),color="blue")
+
+descdist(rt_data$rt_ml)
+descdist(rt_data$ln_rt)
+```
+Even though it could be a better fit, I will use the gaussian distribution --> gamma canno be negative
+Will needed to be revisted!!
+
+### Step 2: Statistical model
+
+```{r}
+contrasts(rt_data$cc) <- "contr.sum"
+contrasts(rt_data$Freq.clone.2) <- "contr.sum"
+
+m_rt <- lmer(ln_rt ~  cc*Freq.clone.2+day+(1|Rep) ,data=rt_data)
+summary(m_rt)
+Anova(m_rt)
+```
+
+### Step 3: Validating the model
+
+```{r}
+rt_data$fit <- fitted(m_rt)
+
+
+ggplot(rt_data,aes(x=ln_rt,y=fit))+
+  geom_point()+
+  geom_abline()
+
+rt_data$res <- residuals(m_rt2)
+
+qplot(rt_data$res)
+ggplot(rt_data, aes(sample=rt_data$res))+stat_qq()+stat_qq_line()
+qplot(y=rt_data$res,x=seq(1,length(rt_data$res)),geom="point")+geom_hline(yintercept = 0)
+qplot(x=rt_data$fit,y=rt_data$res)
+
+
+plot(rt_data$res~rt_data$cc)
+plot(rt_data$res~rt_data$Freq.clone.1)
+plot(rt_data$res~rt_data$day_fac)
+
+
+```
+The model has some issues with the low values/outliars + real vs fitted values is the slope a bit wrong --> for now I will keep it but for the real manuscript I will need to revise it --> good enough for now due to time limit
+
+
+## Analysis of frequency data
+### Step 1: Plotting for distribution
+```{r}
+freq_data <- data[complete.cases(data$pred_freq_clone.2),]
+
+ggplot(freq_data, aes(x=logfreq)) + geom_histogram(binwidth=.1)
+ggplot(freq_data, aes(x=logfreq)) + geom_density()
+
+freq_data <-freq_data[!is.infinite(freq_data$logfreq),]
+descdist(freq_data$logfreq)
+
+min(freq_data$logfreq)
+max(freq_data$logfreq)
+#I will first check again for gamma and normal distribution
+#For normal
+m<-mean(freq_data$logfreq)
+v<-sqrt(var(freq_data$logfreq))
+gau<-data.frame(x=seq(-4,4,0.01),y=length(freq_data$logfreq)*0.1*dnorm(seq(-4,4,0.01),m,v),name="Gaussian")
+logn <-data.frame(x=seq(-4,4,0.01),y=length(freq_data$logfreq)*0.1*dlnorm(seq(-4,4,0.01)),name="Lognorml")
+
+#For gamma
+rate <- mean(freq_data$logfreq)/var(freq_data$logfreq)
+shape <- rate*mean(freq_data$logfreq)
+gam<-data.frame(x=seq(-4,4,0.01),y=length(freq_data$logfreq)*0.1*dgamma(seq(-4,4,0.01),shape,rate),name="Gamma")
+
+ggplot(freq_data, aes(x=logfreq)) + geom_histogram(binwidth=0.1)+
+  geom_line(data=gau,aes(x=x,y=y,color=name),color="red")
+```
+Gaussian, so normal, distribution seems really good here!
+
+### Step 2: Statistical model
+```{r}
+contrasts(freq_data$cc) <- "contr.sum"
+contrasts(freq_data$Freq.clone.2) <- "contr.sum"
+
+m_freq<-lmer(logfreq~cc*Freq.clone.2*day_fact+(1|Rep),data=freq_data)
+summary(m_freq)
+Anova(m_freq)
+```
+
+### Step 3: Validating the model
+
+```{r}
+freq_data$fit <- fitted(m_freq)
+
+ggplot(freq_data,aes(x=logfreq,y=fit))+
+  geom_point()+
+  geom_abline()
+
+freq_data$res <- residuals(m_freq)
+
+qplot(freq_data$res)
+ggplot(freq_data, aes(sample=freq_data$res))+stat_qq()+stat_qq_line()
+qplot(y=freq_data$res,x=seq(1,length(freq_data$res)),geom="point")+geom_hline(yintercept = 0)
+qplot(x=freq_data$fit,y=freq_data$res)
+
+
+plot(freq_data$res~freq_data$cc)
+plot(freq_data$res~freq_data$Freq.clone.1)
+plot(freq_data$res~freq_data$day_fac)
+```
+The predictions are still rather of from the real data, a tendency can be seen. But the model still needs to be imrpoved --> as well still keeping it for now due to time reasons
+Needs to eb revisted later!
+
+
+## Analysis of log(abs(evo over eco))  -->
+### Step 1: Plotting for distribution
+```{r}
+levo_eco_data<- do.call(data.frame,                      # Replace Inf in data by NA
+                  lapply(data,
+                         function(x) replace(x, is.infinite(x), NA)))
+
+levo_eco_data <- levo_eco_data[complete.cases(levo_eco_data$levo_eco),]
+
+ggplot(levo_eco_data, aes(x=logfreq)) + geom_histogram(binwidth=.1)
+ggplot(levo_eco_data, aes(x=logfreq)) + geom_density()
+
+descdist(levo_eco_data$levo_eco)
+
+min(levo_eco_data$levo_eco)
+max(levo_eco_data$levo_eco)
+#I will first check again for gamma and normal distribution
+#For normal
+m<-mean(levo_eco_data$levo_eco)
+v<-sqrt(var(levo_eco_data$levo_eco))
+gau<-data.frame(x=seq(-9,7,0.01),y=length(levo_eco_data$levo_eco)*0.1*dnorm(seq(-9,7,0.01),m,v),name="Gaussian")
+logn <-data.frame(x=seq(-9,7,0.01),y=length(levo_eco_data$levo_eco)*0.1*dlnorm(seq(-9,7,0.01)),name="Lognorml")
+
+#For gamma
+rate <- mean(levo_eco_data$levo_eco)/var(levo_eco_data$levo_eco)
+shape <- rate*mean(levo_eco_data$levo_eco)
+gam<-data.frame(x=seq(-9,7,0.01),y=length(levo_eco_data$levo_eco)*0.1*dgamma(seq(-9,7,0.01),shape,rate),name="Gamma")
+
+ggplot(levo_eco_data, aes(x=levo_eco)) + geom_histogram(binwidth=0.1)+
+  geom_line(data=gau,aes(x=x,y=y,color=name),color="red")
+
+```
+Gaussian, so normal, distribution seems really good here!
+
+### Step 2: Statistical model
+```{r}
+contrasts(levo_eco_data$cc) <- "contr.sum"
+
+m_levo<-lmer(levo_eco~cc*day_fact+Freq.clone.2+(1|Rep),data=levo_eco_data,contrasts =contr.sum)
+
+
+
+summary(m_levo)
+Anova(m_levo)
+
+TukeyHSD(m_levo)
+```
+
+### Step 3: Validating the model
+
+```{r}
+levo_eco_data$fit <- fitted(m_levo)
+
+ggplot(levo_eco_data,aes(x=levo_eco,y=fit))+
+  geom_point()+
+  geom_abline()
+
+levo_eco_data$res <- residuals(m_levo)
+
+qplot(levo_eco_data$res)
+ggplot(levo_eco_data, aes(sample=levo_eco_data$res))+stat_qq()+stat_qq_line()
+qplot(y=levo_eco_data$res,x=seq(1,length(levo_eco_data$res)),geom="point")+geom_hline(yintercept = 0)
+qplot(x=levo_eco_data$fit,y=levo_eco_data$res)
+
+
+plot(levo_eco_data$res~levo_eco_data$cc)
+```
+
+### Rotifer density at day 8
+This is not from the time series, but another good analysis for the results
+--> as I can say that the final density is the same over all group but we have a "hidden" eco-evo dynamics for them depending on the clonal combination
+
+```{r}
+d8 <- subset(data,day==8)
+
+shapiro.test(d8$rt_ml)
+#W = 0.94237, p-value = 8.882e-05
+
+d8 %>% levene_test(rt_ml~cc)
+#p=0.616191
+
+kruskal.test(d8$rt_ml~d8$cc)
+#Kruskal-Wallis chi-squared = 0.95525, df = 3, p-value = 0.8121
+```
+
+Final density do not differ between the clonal combination, but the way there is significantly different
